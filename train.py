@@ -6,13 +6,11 @@ os.environ["KERAS_BACKEND"] = "tensorflow"
 import tensorflow as tf
 
 import keras
-from keras import layers
 
 import os
 import datetime
 import imageio.v2 as imageio
 import numpy as np
-from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 from data_utils import split_data, create_dataset_pipeline
@@ -26,9 +24,10 @@ AUTO = tf.data.AUTOTUNE
 BATCH_SIZE = 5
 NUM_SAMPLES = 32
 POS_ENCODE_DIMS = 16
-EPOCHS = 100
+EPOCHS = 200
 MODEL_DIR = "models"
 LEARNING_RATE = 1e-4
+HIDDEN_DIM = 256
 
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 checkpoint_dir = os.path.join(MODEL_DIR, f"tinynerf-keras-{current_time}")
@@ -90,7 +89,7 @@ val_ds = create_dataset_pipeline(
 num_pos = H * W * NUM_SAMPLES
 nerf_model = create_nerf_model(
     num_layers=8,
-    hidden_dim=128,
+    hidden_dim=HIDDEN_DIM,
     num_pos=num_pos,
     pos_encode_dims=POS_ENCODE_DIMS
 )
