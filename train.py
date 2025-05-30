@@ -12,6 +12,8 @@ import datetime
 import imageio.v2 as imageio
 import numpy as np
 import matplotlib.pyplot as plt
+import json
+import argparse
 
 from data_utils import split_data, create_dataset_pipeline
 from models import create_nerf_model, NeRF, render_rgb_depth
@@ -19,15 +21,26 @@ from models import create_nerf_model, NeRF, render_rgb_depth
 # tf.random.set_seed(42)
 keras.utils.set_random_seed(42)
 
+# Add argument parser
+parser = argparse.ArgumentParser()
+parser.add_argument("--config", type=str, default="config/tiny_nerf.json")
+args = parser.parse_args()
+
+# Load config json
+with open(args.config) as f:
+    conf = json.load(f)
+
 # Initialize global variables.
+BATCH_SIZE = conf["BATCH_SIZE"]
+NUM_SAMPLES = conf["NUM_SAMPLES"]
+POS_ENCODE_DIMS = conf["POS_ENCODE_DIMS"]
+EPOCHS = conf["EPOCHS"]
+LEARNING_RATE = conf["LEARNING_RATE"]
+NUM_LAYERS = conf["NUM_LAYERS"]
+HIDDEN_DIM = conf["HIDDEN_DIM"]
+
 AUTO = tf.data.AUTOTUNE
-BATCH_SIZE = 5
-NUM_SAMPLES = 32
-POS_ENCODE_DIMS = 16
-EPOCHS = 200
 MODEL_DIR = "models"
-LEARNING_RATE = 1e-4
-HIDDEN_DIM = 256
 
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 checkpoint_dir = os.path.join(MODEL_DIR, f"tinynerf-keras-{current_time}")
@@ -88,7 +101,7 @@ val_ds = create_dataset_pipeline(
 
 num_pos = H * W * NUM_SAMPLES
 nerf_model = create_nerf_model(
-    num_layers=8,
+    num_layers=NUM_LAYERS,
     hidden_dim=HIDDEN_DIM,
     num_pos=num_pos,
     pos_encode_dims=POS_ENCODE_DIMS
@@ -138,6 +151,12 @@ class TrainCallback(keras.callbacks.Callback):
             train=False,
         )
 
+        # Save weights of self.model.nerf_model
+        if not os.path.exists(checkpoint_dir):
+            os.makedirs(checkpoint_dir)
+        weight_path = os.path.join(checkpoint_dir, "nerf.weights.h5")
+        self.model.nerf_model.save_weights(weight_path)
+
         # Plot the rgb, depth and the loss plot.
         fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(20, 5))
         ax[0].imshow(keras.utils.array_to_img(test_recons_images[0]))
@@ -159,15 +178,6 @@ class TrainCallback(keras.callbacks.Callback):
         # plt.close()
 
 
-checkpoint_path = os.path.join(checkpoint_dir, "tinynerf_model.weights.h5")
-
-checkpoint_callback = keras.callbacks.ModelCheckpoint(
-    filepath=checkpoint_path,
-    save_freq="epoch",
-    save_weights_only=True,
-)
-
-
 model.build(input_shape=(BATCH_SIZE, num_pos, 2 * 3 * POS_ENCODE_DIMS + 3))
 
 model.fit(
@@ -175,5 +185,5 @@ model.fit(
     validation_data=val_ds,
     epochs=EPOCHS,
     batch_size=BATCH_SIZE,
-    callbacks=[TrainCallback(), checkpoint_callback],
+    callbacks=[TrainCallback()],
 )
