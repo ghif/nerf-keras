@@ -24,7 +24,6 @@ EPOCHS = conf["EPOCHS"]
 LEARNING_RATE = conf["LEARNING_RATE"]
 NUM_LAYERS = conf["NUM_LAYERS"]
 HIDDEN_DIM = conf["HIDDEN_DIM"]
-WITH_GCS = False
 
 AUTO = tf.data.AUTOTUNE
 MODEL_DIR = "models"
@@ -94,16 +93,7 @@ nerf_model = create_nerf_model(
 print(nerf_model.summary(expand_nested=True))
 
 # Load the model weights if they exist
-if WITH_GCS:
-    checkpoint_dir = tf.io.gfile.join(GCS_MODEL_DIR, "tinynerf-keras-20250530-162350")
-    weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}.weights.h5")
-    if not tf.io.gfile.exists(weight_path):
-        print(f"Model weights not found at {weight_path}.")
-        print("Please check the GCS bucket or download the model weights.")
-        exit(1)
-else:
-# weight_path = f"{MODEL_DIR}/tinynerf-keras-20250530-134332/nerf.weights.h5"
-    weight_path = f"{MODEL_DIR}/tinynerf-keras-best-256/nerf.weights.h5"
+weight_path = f"{MODEL_DIR}/tinynerf-keras-best-256/nerf.weights.h5"
 nerf_model.load_weights(weight_path)
 print("Model weights loaded successfully.")
 
