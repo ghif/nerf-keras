@@ -1,3 +1,6 @@
+import os
+os.environ["KERAS_BACKEND"] = "tensorflow"
+
 import keras
 import tensorflow as tf
 import numpy as np
@@ -93,9 +96,12 @@ nerf_model = create_nerf_model(
 print(nerf_model.summary(expand_nested=True))
 
 # Load the model weights if they exist
-weight_path = f"{MODEL_DIR}/tinynerf-keras-best-256/nerf.weights.h5"
+weight_path = f"{MODEL_DIR}/tinynerf-keras-20250601-043239/nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}.weights.h5"
 nerf_model.load_weights(weight_path)
 print("Model weights loaded successfully.")
+
+for layer in nerf_model.layers:
+    print(f"Layer: {layer.name}, Output Shape: {layer.output.shape}")
 
 train_imgs, train_rays = next(iter(train_ds))
 train_rays_flat, train_t_vals = train_rays
@@ -115,6 +121,9 @@ test_recons_images, depth_maps = render_rgb_depth(
     train=False
 )
 
+mini_model = keras.Model(nerf_model.layers[1].input, nerf_model.layers[1].output)
+h = mini_model.predict(val_rays_flat)
+print(h[0])
 # Create subplots
 fig, axes = plt.subplots(nrows=5, ncols=3, figsize=(10, 20))
 

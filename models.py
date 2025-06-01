@@ -8,7 +8,8 @@ def create_nerf_model(num_layers, hidden_dim, num_pos, pos_encode_dims):
     inputs = keras.Input(shape=(num_pos, 2 * 3 * pos_encode_dims + 3))
     x = inputs
     for i in range(num_layers):
-        x = layers.Dense(hidden_dim, activation='relu')(x)
+        x = layers.Dense(hidden_dim)(x)
+        x = layers.ReLU()(x)
         if i % 4 == 0 and i > 0:
             # Inject residual connection
             x = layers.concatenate([x, inputs], axis=-1)
