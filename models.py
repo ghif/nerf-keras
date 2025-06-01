@@ -46,7 +46,6 @@ def render_rgb_depth(model, rays_flat, t_vals, batch_size, h, w, num_samples, ra
     delta = t_vals[..., 1:] - t_vals[..., :-1]
     # delta shape = (num_samples)
     if rand:
-        b = ops.broadcast_to([1e10], shape=(batch_size, h, w, 1))
         delta = ops.concatenate(
             [delta, ops.broadcast_to([1e10], shape=(batch_size, h, w, 1))], axis=-1
         )

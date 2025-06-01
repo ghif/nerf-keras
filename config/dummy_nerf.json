@@ -3,8 +3,8 @@
     "NUM_SAMPLES": 32,
     "POS_ENCODE_DIMS": 16,
     "NUM_LAYERS": 8,
-    "HIDDEN_DIM": 512,
-    "EPOCHS": 200,
+    "HIDDEN_DIM": 64,
+    "EPOCHS": 2,
     "LEARNING_RATE": 0.0001,
-    "WITH_GCS": false
+    "WITH_GCS": true
 }

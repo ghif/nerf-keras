@@ -3,6 +3,7 @@ import tensorflow as tf
 import numpy as np
 import argparse
 import json
+import matplotlib.pyplot as plt
 
 from data_utils import split_data, create_dataset_pipeline
 from models import create_nerf_model, render_rgb_depth
@@ -23,9 +24,13 @@ EPOCHS = conf["EPOCHS"]
 LEARNING_RATE = conf["LEARNING_RATE"]
 NUM_LAYERS = conf["NUM_LAYERS"]
 HIDDEN_DIM = conf["HIDDEN_DIM"]
+WITH_GCS = False
 
 AUTO = tf.data.AUTOTUNE
 MODEL_DIR = "models"
+
+GCS_BUCKET_NAME = "keras-models"
+GCS_MODEL_DIR = f"gs://{GCS_BUCKET_NAME}/nerf/models"
 
 
 # Download the dataset if it does not exist.
@@ -89,8 +94,16 @@ nerf_model = create_nerf_model(
 print(nerf_model.summary(expand_nested=True))
 
 # Load the model weights if they exist
-
-weight_path = f"{MODEL_DIR}/tinynerf-keras-20250530-134332/nerf.weights.h5"
+if WITH_GCS:
+    checkpoint_dir = tf.io.gfile.join(GCS_MODEL_DIR, "tinynerf-keras-20250530-162350")
+    weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}.weights.h5")
+    if not tf.io.gfile.exists(weight_path):
+        print(f"Model weights not found at {weight_path}.")
+        print("Please check the GCS bucket or download the model weights.")
+        exit(1)
+else:
+# weight_path = f"{MODEL_DIR}/tinynerf-keras-20250530-134332/nerf.weights.h5"
+    weight_path = f"{MODEL_DIR}/tinynerf-keras-best-256/nerf.weights.h5"
 nerf_model.load_weights(weight_path)
 print("Model weights loaded successfully.")
 
@@ -99,3 +112,32 @@ train_rays_flat, train_t_vals = train_rays
 
 val_imgs, val_rays = next(iter(val_ds))
 val_rays_flat, val_t_vals = val_rays
+
+test_recons_images, depth_maps = render_rgb_depth(
+    model=nerf_model,
+    rays_flat=val_rays_flat,
+    t_vals=val_t_vals,
+    batch_size=BATCH_SIZE,
+    h=H,
+    w=W,
+    num_samples=NUM_SAMPLES,
+    rand=True,
+    train=False
+)
+
+# Create subplots
+fig, axes = plt.subplots(nrows=5, ncols=3, figsize=(10, 20))
+
+for ax, ori_img, recons_img, depth_map in zip(
+    axes, val_imgs, test_recons_images, depth_maps
+):
+    ax[0].imshow(keras.utils.array_to_img(ori_img))
+    ax[0].set_title("Original Image")
+
+    ax[1].imshow(keras.utils.array_to_img(recons_img))
+    ax[1].set_title("Reconstructed Image")
+
+    ax[2].imshow(keras.utils.array_to_img(depth_map[..., None]), cmap="inferno")
+    ax[2].set_title("Depth Map")
+
+plt.show()

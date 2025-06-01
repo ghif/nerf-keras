@@ -1,5 +1,4 @@
 import os
-
 os.environ["KERAS_BACKEND"] = "tensorflow"
 
 # Setting random seed to obtain reproducible results.
@@ -7,7 +6,7 @@ import tensorflow as tf
 
 import keras
 
-import os
+import io
 import datetime
 import imageio.v2 as imageio
 import numpy as np
@@ -38,16 +37,29 @@ EPOCHS = conf["EPOCHS"]
 LEARNING_RATE = conf["LEARNING_RATE"]
 NUM_LAYERS = conf["NUM_LAYERS"]
 HIDDEN_DIM = conf["HIDDEN_DIM"]
+WITH_GCS = conf["WITH_GCS"]
 
 AUTO = tf.data.AUTOTUNE
+
 MODEL_DIR = "models"
-
-current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-checkpoint_dir = os.path.join(MODEL_DIR, f"tinynerf-keras-{current_time}")
-
-# Create the model directory if it does not exist.
 if not os.path.exists(MODEL_DIR):
     os.makedirs(MODEL_DIR)
+
+# GCS bucket configuration
+GCS_BUCKET_NAME = "keras-models"
+GCS_MODEL_DIR = f"gs://{GCS_BUCKET_NAME}/nerf/models"
+GCS_IMAGE_DIR = f"gs://{GCS_BUCKET_NAME}/nerf/images"
+
+current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+if WITH_GCS:
+    checkpoint_dir = os.path.join(GCS_MODEL_DIR, f"tinynerf-keras-{current_time}")
+    visualization_dir = os.path.join(GCS_IMAGE_DIR, f"tinynerf-keras-{current_time}")
+else:
+    checkpoint_dir = os.path.join(MODEL_DIR, f"tinynerf-keras-{current_time}")
+
+# Create the model directory if it does not exist.
+
 
 # Download the dataset if it does not exist.
 url = (
@@ -152,9 +164,19 @@ class TrainCallback(keras.callbacks.Callback):
         )
 
         # Save weights of self.model.nerf_model
-        if not os.path.exists(checkpoint_dir):
-            os.makedirs(checkpoint_dir)
-        weight_path = os.path.join(checkpoint_dir, "nerf.weights.h5")
+        if WITH_GCS:
+            if not tf.io.gfile.exists(checkpoint_dir):
+                tf.io.gfile.makedirs(checkpoint_dir)
+
+            print(f"Created GCS directory: {checkpoint_dir}")
+            weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}.weights.h5")
+        else:
+            if not os.path.exists(checkpoint_dir):
+                os.makedirs(checkpoint_dir)
+
+            print(f"Created Local directory: {checkpoint_dir}")
+            weight_path = os.path.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}.weights.h5")
+
         self.model.nerf_model.save_weights(weight_path)
 
         # Plot the rgb, depth and the loss plot.
@@ -169,11 +191,29 @@ class TrainCallback(keras.callbacks.Callback):
         ax[2].set_xticks(np.arange(0, EPOCHS + 1, 5.0))
         ax[2].set_title(f"Loss Plot: {epoch:03d}")
 
-        img_dir = f"images/{checkpoint_dir}"
-        if not os.path.exists(img_dir):
-            os.makedirs(img_dir)
+        if WITH_GCS:
+            if not tf.io.gfile.exists(visualization_dir):
+                tf.io.gfile.makedirs(visualization_dir)
+            img_path = tf.io.gfile.join(visualization_dir, f"{epoch:03d}.png")
 
-        fig.savefig(f"{img_dir}/{epoch:03d}.png")
+            # Save figure to a BytesIO buffer
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png')
+            buf.seek(0) # Rewind buffer to the beginning
+            # Write buffer to GCS
+            with tf.io.gfile.GFile(img_path, 'wb') as f:
+                f.write(buf.getvalue())
+            print(f"Saved image to GCS: {img_path}")
+            buf.close()
+
+        else:
+            img_dir = f"images/{checkpoint_dir}"
+            if not os.path.exists(img_dir):
+                os.makedirs(img_dir)
+
+            img_path = os.path.join(img_dir, f"{epoch:03d}.png")
+
+            fig.savefig(img_path)
         # plt.show()
         # plt.close()
 
