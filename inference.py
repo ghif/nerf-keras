@@ -93,6 +93,7 @@ nerf_model = create_nerf_model(
     pos_encode_dims=POS_ENCODE_DIMS
 )
 
+
 print(nerf_model.summary(expand_nested=True))
 
 # Load the model weights if they exist
@@ -100,14 +101,43 @@ weight_path = f"{MODEL_DIR}/tinynerf-keras-20250601-043239/nerf_l{NUM_LAYERS}_d{
 nerf_model.load_weights(weight_path)
 print("Model weights loaded successfully.")
 
-for layer in nerf_model.layers:
-    print(f"Layer: {layer.name}, Output Shape: {layer.output.shape}")
-
 train_imgs, train_rays = next(iter(train_ds))
 train_rays_flat, train_t_vals = train_rays
 
 val_imgs, val_rays = next(iter(val_ds))
 val_rays_flat, val_t_vals = val_rays
+
+# # Test ReLU directly
+# relu_layer_test = keras.layers.ReLU()
+# test_input_neg = tf.constant([-3.0, -0.5, 0.0, 0.5, 3.0])
+# test_output_neg = relu_layer_test(test_input_neg)
+# print(f"Direct ReLU test input: {test_input_neg.numpy()}")
+# print(f"Direct ReLU test output: {test_output_neg.numpy()}") # Expected: [0. 0. 0. 0.5 3.]
+
+# # Test ReLU in a minimal Sequential model
+# simple_model = keras.Sequential([
+#     keras.Input(shape=(1,)), # Expects input shape (batch_size, 1)
+#     # keras.layers.Dense(1, kernel_initializer='ones', bias_initializer='zeros'),
+#     keras.layers.Dense(1),
+#     keras.layers.ReLU()
+# ])
+# # Prepare input with correct rank for Dense layer
+# test_input_for_model = np.array([[-3.0], [-0.5], [0.0], [0.5], [3.0]], dtype=np.float32)
+# simple_output = simple_model.predict(test_input_for_model)
+# print(f"Simple model (Dense -> ReLU) input: {test_input_for_model.flatten()}")
+# print(f"Simple model (Dense -> ReLU) output: {simple_output.flatten()}") # Expected: [0. 0. 0. 0.5 3.]
+
+# mini_model_prerelu = keras.Model(nerf_model.input, nerf_model.layers[1].output)
+# print(mini_model_prerelu.summary(expand_nested=True))
+# h1 = mini_model_prerelu(val_rays_flat)
+# print(f"h1[0]: {h1[0]}")
+
+# mini_model = keras.Model(nerf_model.input, nerf_model.layers[2].output)
+# print(mini_model.summary(expand_nested=True))
+# h2 = mini_model(val_rays_flat.numpy())
+# print(f"h2[0]: {h2[0]}")
+
+# print(f"h1[0] == h2[0]: {np.allclose(h1[0], h2[0])}") 
 
 test_recons_images, depth_maps = render_rgb_depth(
     model=nerf_model,
@@ -121,9 +151,6 @@ test_recons_images, depth_maps = render_rgb_depth(
     train=False
 )
 
-mini_model = keras.Model(nerf_model.layers[1].input, nerf_model.layers[1].output)
-h = mini_model.predict(val_rays_flat)
-print(h[0])
 # Create subplots
 fig, axes = plt.subplots(nrows=5, ncols=3, figsize=(10, 20))
 

@@ -33,10 +33,8 @@ def render_rgb_depth(model, rays_flat, t_vals, batch_size, h, w, num_samples, ra
         Tuple of rgb image and depth map.
     """
     # Get the predictions from the nerf model and reshape it.
-    if train:
-        predictions = model(rays_flat)
-    else:
-        predictions = model.predict(rays_flat)
+    predictions = model(rays_flat, training=train)
+
     predictions = ops.reshape(predictions, (batch_size, h, w, num_samples, 4))
 
     # Slice the predictions into rgb and sigma.
