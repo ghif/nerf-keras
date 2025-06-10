@@ -171,13 +171,13 @@ class TrainCallback(keras.callbacks.Callback):
                 tf.io.gfile.makedirs(checkpoint_dir)
 
             print(f"Created GCS directory: {checkpoint_dir}")
-            weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}.weights.h5")
+            weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NUM_SAMPLES}_ep{EPOCHS}.weights.h5")
         else:
             if not os.path.exists(checkpoint_dir):
                 os.makedirs(checkpoint_dir)
 
             print(f"Created Local directory: {checkpoint_dir}")
-            weight_path = os.path.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}.weights.h5")
+            weight_path = os.path.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NUM_SAMPLES}_ep{EPOCHS}.weights.h5")
 
         self.model.nerf_model.save_weights(weight_path)
 
