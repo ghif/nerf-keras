@@ -79,6 +79,21 @@ def render_flat_rays(
     rays_flat = encode_position(rays_flat, pos_encode_dims)
     return (rays_flat, t_vals)
 
+def create_preprocess_image_fn(target_height, target_width):
+    """Creates a preprocessing function for images.
+
+    Args:
+        target_height: Target height for resizing images.
+        target_width: Target width for resizing images.
+
+    Returns:
+        A function that preprocesses an image by resizing it.
+    """
+    def preprocess_image(image):
+        image = tf.image.resize(image, [target_height, target_width])
+        return image
+    return preprocess_image
+
 def create_map_fn(H, W, focal, num_samples, pos_encode_dims, near, far, rand):
     """Creates a mapping function for dataset processing.
 
@@ -166,6 +181,11 @@ def create_dataset_pipeline(
     img_ds = tf.data.Dataset.from_tensor_slices(images_data)
     pose_ds = tf.data.Dataset.from_tensor_slices(poses_data)
 
+    # Preprocess images
+    preprocess_fn_instance = create_preprocess_image_fn(H, W)
+    img_ds = img_ds.map(preprocess_fn_instance, num_parallel_calls=auto)
+
+    # Create the mapping function for rays and t_vals
     map_fn_instance = create_map_fn(
         H, W, focal, num_samples, pos_encode_dims, near, far, rand_sampling
     )

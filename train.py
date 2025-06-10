@@ -38,6 +38,8 @@ LEARNING_RATE = conf["LEARNING_RATE"]
 NUM_LAYERS = conf["NUM_LAYERS"]
 HIDDEN_DIM = conf["HIDDEN_DIM"]
 WITH_GCS = conf["WITH_GCS"]
+H = conf["HEIGHT"]
+W = conf["WIDTH"]
 
 AUTO = tf.data.AUTOTUNE
 
@@ -71,7 +73,7 @@ data = keras.utils.get_file(origin=url)
 data = np.load(data)
 images = data["images"]
 im_shape = images.shape
-(num_images, H, W, _) = images.shape
+(num_images, _, _, _) = images.shape
 (poses, focal) = (data["poses"], data["focal"])
 
 # Split the data into training and validation sets
