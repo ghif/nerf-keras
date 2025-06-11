@@ -218,7 +218,7 @@ class TrainCallback(keras.callbacks.Callback):
             buf.close()
 
             # Save history to a JSON file
-            history_path = tf.io.gfile.join(checkpoint_dir, "history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NUM_SAMPLES}_ep{EPOCHS}.json")
+            history_path = tf.io.gfile.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NUM_SAMPLES}_ep{EPOCHS}.json")
             try:
                 history_json_string = json.dumps(history)
                 with tf.io.gfile.GFile(history_path, 'w') as f_json:
@@ -237,7 +237,7 @@ class TrainCallback(keras.callbacks.Callback):
             fig.savefig(img_path)
 
             # Save history to a JSON file
-            history_path = os.path.join(checkpoint_dir, "history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NUM_SAMPLES}_ep{EPOCHS}.json")
+            history_path = os.path.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NUM_SAMPLES}_ep{EPOCHS}.json")
             with open(history_path, 'w') as f:
                 json.dump(history, f)
 
