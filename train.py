@@ -145,14 +145,23 @@ val_imgs, val_rays = next(iter(val_ds))
 val_rays_flat, val_t_vals = val_rays
 
 loss_list = []
+psnr_list = []
+history = {"losses": [], "psnrs": []}
 
 class TrainCallback(keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
         """Saves images at the end of each epoch."""
         print(f"TrainCallback: Epoch {epoch + 1} ended with logs: {logs}")
         loss = logs["loss"]
-        loss_list.append(loss)
+        psnr = logs["psnr"]
 
+        loss_list.append(loss)
+        psnr_list.append(psnr)
+
+        history["losses"] = loss_list
+        history["psnrs"] = psnr_list
+
+        
         test_recons_images, depth_maps = render_rgb_depth(
             self.model.nerf_model,
             val_rays_flat,
@@ -208,6 +217,16 @@ class TrainCallback(keras.callbacks.Callback):
             print(f"Saved image to GCS: {img_path}")
             buf.close()
 
+            # Save history to a JSON file
+            history_path = tf.io.gfile.join(checkpoint_dir, "history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NUM_SAMPLES}_ep{EPOCHS}.json")
+            try:
+                history_json_string = json.dumps(history)
+                with tf.io.gfile.GFile(history_path, 'w') as f_json:
+                    f_json.write(history_json_string)
+            except Exception as e:
+                print(f"Error saving history to GCS: {e}")
+            
+
         else:
             img_dir = f"images/{checkpoint_dir}"
             if not os.path.exists(img_dir):
@@ -216,6 +235,12 @@ class TrainCallback(keras.callbacks.Callback):
             img_path = os.path.join(img_dir, f"{epoch:03d}.png")
 
             fig.savefig(img_path)
+
+            # Save history to a JSON file
+            history_path = os.path.join(checkpoint_dir, "history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NUM_SAMPLES}_ep{EPOCHS}.json")
+            with open(history_path, 'w') as f:
+                json.dump(history, f)
+
         # plt.show()
         # plt.close()
 
