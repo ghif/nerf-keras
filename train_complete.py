@@ -190,7 +190,7 @@ class TrainCallback(keras.callbacks.Callback):
         history["psnrs"] = psnr_list
 
         predictions_fine = self.model.fine_model([val_rays_flat, val_dirs_flat], training=False)
-        predictions_fine = ops.reshape(predictions_fine, (-1, H, W, NS_FINE, 4))
+        predictions_fine = ops.reshape(predictions_fine, (-1, H, W, NS_FINE + NS_COARSE, 4))
         test_recons_images, depth_maps = render_predictions(predictions_fine, val_t_vals, rand=True)
         
         # test_recons_images, depth_maps = render_rgb_depth(
