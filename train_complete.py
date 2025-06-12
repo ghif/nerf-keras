@@ -5,6 +5,7 @@ os.environ["KERAS_BACKEND"] = "tensorflow"
 import tensorflow as tf
 
 import keras
+from keras import ops
 
 import io
 import datetime
@@ -14,15 +15,15 @@ import matplotlib.pyplot as plt
 import json
 import argparse
 
-from data_utils import split_data, create_dataset_pipeline
-from models import create_nerf_model, NeRF, render_rgb_depth
+from data_utils import split_data, create_tiny_dataset_pipeline
+from models import create_nerf_complete_model, NeRFTrainer, render_rgb_depth, render_predictions
 
 # tf.random.set_seed(42)
 keras.utils.set_random_seed(42)
 
 # Add argument parser
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", type=str, default="config/tiny_nerf.json")
+parser.add_argument("--config", type=str, default="config/tiny_nerf_complete_h256.json")
 args = parser.parse_args()
 
 # Load config json
@@ -31,11 +32,15 @@ with open(args.config) as f:
 
 # Initialize global variables.
 BATCH_SIZE = conf["BATCH_SIZE"]
-NUM_SAMPLES = conf["NUM_SAMPLES"]
-POS_ENCODE_DIMS = conf["POS_ENCODE_DIMS"]
-EPOCHS = conf["EPOCHS"]
+NS_COARSE = conf["NS_COARSE"]
+NS_FINE = conf["NS_FINE"]
+L_XYZ = conf["L_XYZ"]
+L_DIR = conf["L_DIR"]
+# EPOCHS = conf["EPOCHS"]
+EPOCHS = 1
 LEARNING_RATE = conf["LEARNING_RATE"]
 NUM_LAYERS = conf["NUM_LAYERS"]
+SKIP_LAYER = conf["SKIP_LAYER"]
 HIDDEN_DIM = conf["HIDDEN_DIM"]
 WITH_GCS = conf["WITH_GCS"]
 H = conf["HEIGHT"]
@@ -79,15 +84,16 @@ im_shape = images.shape
 # Split the data into training and validation sets
 train_images, val_images, train_poses, val_poses = split_data(images, poses, split_ratio=0.8)
 
-# Make the dataset pipelines
-train_ds = create_dataset_pipeline(
+# Make the train dataset pipelines
+train_ds = create_tiny_dataset_pipeline(
     train_images,
     train_poses,
     H,
     W,
     focal,
-    NUM_SAMPLES,
-    POS_ENCODE_DIMS,
+    NS_COARSE,
+    L_XYZ,
+    L_DIR,
     BATCH_SIZE,
     AUTO,
     near=2.0,
@@ -96,15 +102,16 @@ train_ds = create_dataset_pipeline(
     rand_sampling=True,
 )
 
-# Make the validation pipeline
-val_ds = create_dataset_pipeline(
+# Make the validation dataset pipeline
+val_ds = create_tiny_dataset_pipeline(
     val_images,
     val_poses,
     H,
     W,
     focal,
-    NUM_SAMPLES,
-    POS_ENCODE_DIMS,
+    NS_COARSE,
+    L_XYZ,
+    L_DIR,
     BATCH_SIZE,
     AUTO,
     near=2.0,
@@ -113,24 +120,46 @@ val_ds = create_dataset_pipeline(
     rand_sampling=False, # Or True, depending on if you want stochasticity here
 )
 
-num_pos = H * W * NUM_SAMPLES
-nerf_model = create_nerf_model(
+train_imgs, train_rays = next(iter(train_ds))
+train_ray_origins, train_ray_directions, train_rays_flat, train_dirs_flat, train_t_vals = train_rays
+
+val_imgs, val_rays = next(iter(val_ds))
+val_ray_origins, val_ray_directions, val_rays_flat, val_dirs_flat, val_t_vals = val_rays
+
+# Create coarse and fine NeRF models
+coarse_model = create_nerf_complete_model(
     num_layers=NUM_LAYERS,
     hidden_dim=HIDDEN_DIM,
-    num_pos=num_pos,
-    pos_encode_dims=POS_ENCODE_DIMS
+    skip_layer=SKIP_LAYER,
+    lxyz=L_XYZ,
+    ldir=L_DIR
 )
 
-print("Model Summary:")
-print(nerf_model.summary(expand_nested=True))
+fine_model = create_nerf_complete_model(
+    num_layers=NUM_LAYERS,
+    hidden_dim=HIDDEN_DIM,
+    skip_layer=SKIP_LAYER,
+    lxyz=L_XYZ,
+    ldir=L_DIR
+)
 
-model = NeRF(nerf_model, BATCH_SIZE, NUM_SAMPLES)
-optimizer=keras.optimizers.AdamW(
+nerf_trainer = NeRFTrainer(
+    coarse_model=coarse_model,
+    fine_model=fine_model,
+    batch_size=BATCH_SIZE,
+    ns_coarse=NS_COARSE,
+    ns_fine=NS_FINE
+)
+optimizer_coarse = keras.optimizers.AdamW(
     learning_rate=LEARNING_RATE
 )
-model.compile(
-    # optimizer=keras.optimizers.Adam(),
-    optimizer=optimizer,
+
+optimizer_fine = keras.optimizers.AdamW(
+    learning_rate=LEARNING_RATE
+)
+nerf_trainer.compile(
+    optimizer_coarse=optimizer_coarse,
+    optimizer_fine=optimizer_fine,
     loss_fn=keras.losses.MeanSquaredError(),
 )
 
@@ -138,12 +167,7 @@ model.compile(
 if not os.path.exists("images"):
     os.makedirs("images")
 
-train_imgs, train_rays = next(iter(train_ds))
-train_rays_flat, train_t_vals = train_rays
-
-val_imgs, val_rays = next(iter(val_ds))
-val_rays_flat, val_t_vals = val_rays
-
+loss_coarse_list = []
 loss_list = []
 psnr_list = []
 history = {"losses": [], "psnrs": []}
@@ -152,27 +176,34 @@ class TrainCallback(keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
         """Saves images at the end of each epoch."""
         print(f"TrainCallback: Epoch {epoch + 1} ended with logs: {logs}")
+
+        loss_coarse = logs["loss_coarse"]
         loss = logs["loss"]
         psnr = logs["psnr"]
 
+        loss_coarse_list.append(loss_coarse)
         loss_list.append(loss)
         psnr_list.append(psnr)
 
+        history["losses_coarse"] = loss_coarse_list
         history["losses"] = loss_list
         history["psnrs"] = psnr_list
 
+        predictions_fine = self.model.fine_model([val_rays_flat, val_dirs_flat], training=False)
+        predictions_fine = ops.reshape(predictions_fine, (-1, H, W, NS_FINE, 4))
+        test_recons_images, depth_maps = render_predictions(predictions_fine, val_t_vals, rand=True)
         
-        test_recons_images, depth_maps = render_rgb_depth(
-            self.model.nerf_model,
-            val_rays_flat,
-            val_t_vals,
-            BATCH_SIZE,
-            H,
-            W,
-            NUM_SAMPLES,
-            rand=True,
-            train=False,
-        )
+        # test_recons_images, depth_maps = render_rgb_depth(
+        #     self.model.nerf_model,
+        #     val_rays_flat,
+        #     val_t_vals,
+        #     BATCH_SIZE,
+        #     H,
+        #     W,
+        #     NUM_SAMPLES,
+        #     rand=True,
+        #     train=False,
+        # )
 
         # Save weights of self.model.nerf_model
         if WITH_GCS:
@@ -180,13 +211,13 @@ class TrainCallback(keras.callbacks.Callback):
                 tf.io.gfile.makedirs(checkpoint_dir)
 
             print(f"Created GCS directory: {checkpoint_dir}")
-            weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NUM_SAMPLES}_ep{EPOCHS}.weights.h5")
+            weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_FINE}_ep{EPOCHS}.weights.h5")
         else:
             if not os.path.exists(checkpoint_dir):
                 os.makedirs(checkpoint_dir)
 
             print(f"Created Local directory: {checkpoint_dir}")
-            weight_path = os.path.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NUM_SAMPLES}_ep{EPOCHS}.weights.h5")
+            weight_path = os.path.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_FINE}_ep{EPOCHS}.weights.h5")
 
         self.model.nerf_model.save_weights(weight_path)
 
@@ -218,7 +249,7 @@ class TrainCallback(keras.callbacks.Callback):
             buf.close()
 
             # Save history to a JSON file
-            history_path = tf.io.gfile.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NUM_SAMPLES}_ep{EPOCHS}.json")
+            history_path = tf.io.gfile.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_FINE}_ep{EPOCHS}.json")
             try:
                 history_json_string = json.dumps(history)
                 with tf.io.gfile.GFile(history_path, 'w') as f_json:
@@ -237,7 +268,7 @@ class TrainCallback(keras.callbacks.Callback):
             fig.savefig(img_path)
 
             # Save history to a JSON file
-            history_path = os.path.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NUM_SAMPLES}_ep{EPOCHS}.json")
+            history_path = os.path.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_FINE}_ep{EPOCHS}.json")
             with open(history_path, 'w') as f:
                 json.dump(history, f)
 
@@ -245,12 +276,11 @@ class TrainCallback(keras.callbacks.Callback):
         # plt.close()
 
 
-# model.build(input_shape=(BATCH_SIZE, num_pos, 2 * 3 * POS_ENCODE_DIMS + 3))
+# nerf_trainer.build(input_shape=(BATCH_SIZE, num_pos, 2 * 3 * POS_ENCODE_DIMS + 3))
 
-# model.fit(
-#     train_ds,
-#     validation_data=val_ds,
-#     epochs=EPOCHS,
-#     batch_size=BATCH_SIZE,
-#     callbacks=[TrainCallback()],
-# )
+nerf_trainer.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=EPOCHS,
+    callbacks=[TrainCallback()],
+)

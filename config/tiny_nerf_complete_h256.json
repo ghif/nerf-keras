@@ -1,0 +1,15 @@
+{
+    "BATCH_SIZE": 5,
+    "NS_COARSE": 64,
+    "NS_FINE": 128,
+    "HEIGHT": 50,
+    "WIDTH": 50,
+    "L_XYZ": 10,
+    "L_DIR": 4,
+    "NUM_LAYERS": 8,
+    "HIDDEN_DIM": 256,
+    "SKIP_LAYER": 4,
+    "EPOCHS": 500,
+    "LEARNING_RATE": 0.0005,
+    "WITH_GCS": false
+}
