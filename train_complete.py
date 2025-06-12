@@ -65,8 +65,6 @@ if WITH_GCS:
 else:
     checkpoint_dir = os.path.join(MODEL_DIR, f"tinynerf-keras-{current_time}")
 
-# Create the model directory if it does not exist.
-
 
 # Download the dataset if it does not exist.
 url = (
@@ -125,6 +123,9 @@ train_ray_origins, train_ray_directions, train_rays_flat, train_dirs_flat, train
 
 val_imgs, val_rays = next(iter(val_ds))
 val_ray_origins, val_ray_directions, val_rays_flat, val_dirs_flat, val_t_vals = val_rays
+
+# Use mixed precision
+keras.mixed_precision.set_global_policy("mixed_float16")
 
 # Create coarse and fine NeRF models
 coarse_model = create_nerf_complete_model(
@@ -249,7 +250,7 @@ class TrainCallback(keras.callbacks.Callback):
             buf.close()
 
             # Save history to a JSON file
-            history_path = tf.io.gfile.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_FINE}_ep{EPOCHS}.json")
+            history_path = tf.io.gfile.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.json")
             try:
                 history_json_string = json.dumps(history)
                 with tf.io.gfile.GFile(history_path, 'w') as f_json:
@@ -268,7 +269,7 @@ class TrainCallback(keras.callbacks.Callback):
             fig.savefig(img_path)
 
             # Save history to a JSON file
-            history_path = os.path.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_FINE}_ep{EPOCHS}.json")
+            history_path = os.path.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE +NS_FINE}_ep{EPOCHS}.json")
             with open(history_path, 'w') as f:
                 json.dump(history, f)
 
