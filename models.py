@@ -131,7 +131,7 @@ class NeRFTrainer(keras.Model):
         (images, rays) = inputs
         l_xyz = int((ops.shape(self.coarse_model.inputs[0])[-1] - 3) / 6)
         l_dir = int((ops.shape(self.coarse_model.inputs[1])[-1] - 3) / 6)
-        (ray_origins, ray_directions, rays_flat, dirs_flat, t_vals)  = rays
+        (ray_origins, ray_directions, rays_flat, dirs_flat, t_vals) = rays
 
         # Get image dimensions
         h, w = ops.shape(images)[1:3]

@@ -124,9 +124,6 @@ train_ray_origins, train_ray_directions, train_rays_flat, train_dirs_flat, train
 val_imgs, val_rays = next(iter(val_ds))
 val_ray_origins, val_ray_directions, val_rays_flat, val_dirs_flat, val_t_vals = val_rays
 
-# Use mixed precision
-keras.mixed_precision.set_global_policy("mixed_float16")
-
 # Create coarse and fine NeRF models
 coarse_model = create_nerf_complete_model(
     num_layers=NUM_LAYERS,
