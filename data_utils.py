@@ -140,7 +140,6 @@ def render_predictions(predictions, t_vals, rand=True):
     """
     # Get batch size, h , w
     batch_size, h, w = ops.shape(predictions)[:3]
-    print(f"batch_size: {batch_size}, h: {h}, w: {w}")
 
     # Slice the predictions into rgb and sigma.
     rgb = ops.sigmoid(predictions[..., :-1])

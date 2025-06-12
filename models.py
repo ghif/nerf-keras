@@ -204,7 +204,7 @@ class NeRFTrainer(keras.Model):
         rays_flat_fine, dirs_flat_fine = sample_rays_flat(ray_origins, ray_directions, t_vals_fine_all, l_xyz, l_dir)
 
         predictions_fine = self.fine_model([rays_flat_fine, dirs_flat_fine], training=False)
-        predictions_fine = ops.reshape(predictions_fine, (-1, h, w, self.ns_fine, 4))
+        predictions_fine = ops.reshape(predictions_fine, (-1, h, w, self.ns_fine + self.ns_coarse, 4))
         rgb_fine, depth_fine = render_predictions(predictions_fine, t_vals_fine_all, rand=True)
         loss_fine = self.loss_fn(images, rgb_fine)
 
