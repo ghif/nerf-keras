@@ -9,7 +9,7 @@
     "NUM_LAYERS": 8,
     "HIDDEN_DIM": 256,
     "SKIP_LAYER": 4,
-    "EPOCHS": 500,
+    "EPOCHS": 100,
     "LEARNING_RATE": 0.0005,
     "WITH_GCS": false
 }
