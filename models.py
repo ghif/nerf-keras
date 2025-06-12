@@ -111,6 +111,11 @@ class NeRFTrainer(keras.Model):
         self.ns_coarse = ns_coarse
         self.ns_fine = ns_fine
 
+        if not isinstance(self.coarse_model, keras.Model):
+            raise TypeError("coarse_model must be a keras.Model instance")
+        if not isinstance(self.fine_model, keras.Model):
+            raise TypeError("fine_model must be a keras.Model instance")
+
 
     def compile(self, optimizer_coarse, optimizer_fine, loss_fn):
         super().compile()

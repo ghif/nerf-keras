@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 import json
 import argparse
 
-from data_utils import split_data, create_tiny_dataset_pipeline
-from models import create_nerf_complete_model, NeRFTrainer, render_rgb_depth, render_predictions
+from data_utils import split_data, create_tiny_dataset_pipeline, sample_pdf, sample_rays_flat
+from models import create_nerf_complete_model, NeRFTrainer, render_predictions
 
 # tf.random.set_seed(42)
 keras.utils.set_random_seed(42)
@@ -189,37 +189,37 @@ class TrainCallback(keras.callbacks.Callback):
         history["losses"] = loss_list
         history["psnrs"] = psnr_list
 
-        predictions_fine = self.model.fine_model([val_rays_flat, val_dirs_flat], training=False)
-        predictions_fine = ops.reshape(predictions_fine, (-1, H, W, NS_FINE + NS_COARSE, 4))
-        test_recons_images, depth_maps = render_predictions(predictions_fine, val_t_vals, rand=True)
-        
-        # test_recons_images, depth_maps = render_rgb_depth(
-        #     self.model.nerf_model,
-        #     val_rays_flat,
-        #     val_t_vals,
-        #     BATCH_SIZE,
-        #     H,
-        #     W,
-        #     NUM_SAMPLES,
-        #     rand=True,
-        #     train=False,
-        # )
+        predictions = self.model.coarse_model([val_rays_flat, val_dirs_flat], training=False)
+        predictions_coarse = ops.reshape(predictions, (-1, H, W, NS_COARSE, 4))
+        _, depth_coarse = render_predictions(predictions_coarse, val_t_vals, rand=True)
 
+        val_t_vals_coarse_mid = (0.5 * (val_t_vals[..., 1:] + val_t_vals[..., :-1]))
+
+        val_t_vals_fine = sample_pdf(val_t_vals_coarse_mid, depth_coarse[..., None], NS_FINE)
+        val_t_vals_fine_all = ops.sort(ops.concatenate([val_t_vals, val_t_vals_fine], axis=-1), axis=-1)
+
+        val_rays_flat_fine, val_dirs_flat_fine = sample_rays_flat(val_ray_origins, val_ray_directions, val_t_vals_fine_all, L_XYZ, L_DIR)
+
+        predictions_fine = self.model.fine_model([val_rays_flat_fine, val_dirs_flat_fine], training=False)
+        print(f"[TrainCallback] Predictions fine shape: {predictions_fine.shape}")
+        predictions_fine = ops.reshape(predictions_fine, (-1, H, W, NS_FINE + NS_COARSE, 4))
+        test_recons_images, depth_maps = render_predictions(predictions_fine, val_t_vals_fine_all, rand=True)
+        
         # Save weights of self.model.nerf_model
         if WITH_GCS:
             if not tf.io.gfile.exists(checkpoint_dir):
                 tf.io.gfile.makedirs(checkpoint_dir)
 
             print(f"Created GCS directory: {checkpoint_dir}")
-            weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_FINE}_ep{EPOCHS}.weights.h5")
+            weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_complete_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
         else:
             if not os.path.exists(checkpoint_dir):
                 os.makedirs(checkpoint_dir)
 
             print(f"Created Local directory: {checkpoint_dir}")
-            weight_path = os.path.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_FINE}_ep{EPOCHS}.weights.h5")
+            weight_path = os.path.join(checkpoint_dir, f"nerf_complete_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
 
-        self.model.nerf_model.save_weights(weight_path)
+        self.model.save_weights(weight_path)
 
         # Plot the rgb, depth and the loss plot.
         fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(20, 5))
@@ -276,7 +276,16 @@ class TrainCallback(keras.callbacks.Callback):
         # plt.close()
 
 
-# nerf_trainer.build(input_shape=(BATCH_SIZE, num_pos, 2 * 3 * POS_ENCODE_DIMS + 3))
+# Build nerf_trainer
+images_shape = train_imgs.shape[1:]
+ray_origins_shape = train_ray_origins.shape[1:]
+ray_directions_shape = train_ray_directions.shape[1:]
+rays_flat_shape = train_rays_flat.shape[1:]
+dirs_flat_shape = train_dirs_flat.shape[1:]
+t_vals_shape = train_t_vals.shape[1:]
+rays_tuple_shape = (ray_origins_shape, ray_directions_shape, rays_flat_shape, dirs_flat_shape, t_vals_shape)
+input_shape_for_build = (images_shape, rays_tuple_shape)
+nerf_trainer.build(input_shape=input_shape_for_build)
 
 nerf_trainer.fit(
     train_ds,
