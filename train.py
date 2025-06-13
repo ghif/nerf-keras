@@ -245,12 +245,12 @@ class TrainCallback(keras.callbacks.Callback):
         # plt.close()
 
 
-# model.build(input_shape=(BATCH_SIZE, num_pos, 2 * 3 * POS_ENCODE_DIMS + 3))
+model.build(input_shape=(BATCH_SIZE, num_pos, 2 * 3 * POS_ENCODE_DIMS + 3))
 
-# model.fit(
-#     train_ds,
-#     validation_data=val_ds,
-#     epochs=EPOCHS,
-#     batch_size=BATCH_SIZE,
-#     callbacks=[TrainCallback()],
-# )
+model.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=EPOCHS,
+    # batch_size=BATCH_SIZE,
+    callbacks=[TrainCallback()],
+)

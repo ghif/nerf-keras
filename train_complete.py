@@ -147,20 +147,20 @@ nerf_trainer = NeRFTrainer(
     ns_coarse=NS_COARSE,
     ns_fine=NS_FINE
 )
-optimizer_coarse = keras.optimizers.AdamW(
-    learning_rate=LEARNING_RATE
-)
-
-optimizer_fine = keras.optimizers.AdamW(
-    learning_rate=LEARNING_RATE
-)
-# optimizer = keras.optimizers.Adam(
+# optimizer_coarse = keras.optimizers.AdamW(
 #     learning_rate=LEARNING_RATE
 # )
+
+# optimizer_fine = keras.optimizers.AdamW(
+#     learning_rate=LEARNING_RATE
+# )
+optimizer = keras.optimizers.Adam(
+    learning_rate=LEARNING_RATE
+)
 nerf_trainer.compile(
-    optimizer_coarse=optimizer_coarse,
-    optimizer_fine=optimizer_fine,
-    # optimizer=optimizer,
+    # optimizer_coarse=optimizer_coarse,
+    # optimizer_fine=optimizer_fine,
+    optimizer=optimizer,
     loss_fn=keras.losses.MeanSquaredError(),
 )
 
