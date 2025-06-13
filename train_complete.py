@@ -154,9 +154,13 @@ optimizer_coarse = keras.optimizers.AdamW(
 optimizer_fine = keras.optimizers.AdamW(
     learning_rate=LEARNING_RATE
 )
+# optimizer = keras.optimizers.Adam(
+#     learning_rate=LEARNING_RATE
+# )
 nerf_trainer.compile(
     optimizer_coarse=optimizer_coarse,
     optimizer_fine=optimizer_fine,
+    # optimizer=optimizer,
     loss_fn=keras.losses.MeanSquaredError(),
 )
 
@@ -186,21 +190,10 @@ class TrainCallback(keras.callbacks.Callback):
         history["losses"] = loss_list
         history["psnrs"] = psnr_list
 
-        predictions = self.model.coarse_model([val_rays_flat, val_dirs_flat], training=False)
-        predictions_coarse = ops.reshape(predictions, (-1, H, W, NS_COARSE, 4))
-        _, depth_coarse = render_predictions(predictions_coarse, val_t_vals, rand=True)
+        rgbs, depths, weights = self.model.forward_render(val_ray_origins, val_ray_directions, val_t_vals, H, W, L_XYZ, L_DIR, training=False)
 
-        val_t_vals_coarse_mid = (0.5 * (val_t_vals[..., 1:] + val_t_vals[..., :-1]))
-
-        val_t_vals_fine = sample_pdf(val_t_vals_coarse_mid, depth_coarse[..., None], NS_FINE)
-        val_t_vals_fine_all = ops.sort(ops.concatenate([val_t_vals, val_t_vals_fine], axis=-1), axis=-1)
-
-        val_rays_flat_fine, val_dirs_flat_fine = sample_rays_flat(val_ray_origins, val_ray_directions, val_t_vals_fine_all, L_XYZ, L_DIR)
-
-        predictions_fine = self.model.fine_model([val_rays_flat_fine, val_dirs_flat_fine], training=False)
-        print(f"[TrainCallback] Predictions fine shape: {predictions_fine.shape}")
-        predictions_fine = ops.reshape(predictions_fine, (-1, H, W, NS_FINE + NS_COARSE, 4))
-        test_recons_images, depth_maps = render_predictions(predictions_fine, val_t_vals_fine_all, rand=True)
+        (_, test_recons_images) = rgbs
+        (_, depth_maps) = depths
         
         # Save weights of self.model.nerf_model
         if WITH_GCS:

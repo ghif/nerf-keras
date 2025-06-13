@@ -118,13 +118,54 @@ class NeRFTrainer(keras.Model):
 
 
     def compile(self, optimizer_coarse, optimizer_fine, loss_fn):
+    # def compile(self, optimizer, loss_fn):
         super().compile()
         self.optimizer_coarse = optimizer_coarse
         self.optimizer_fine = optimizer_fine
+        # self.optimizer = optimizer
         self.loss_fn = loss_fn
         self.loss_coarse_tracker = keras.metrics.Mean(name="loss_coarse")
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.psnr_tracker = keras.metrics.Mean(name="psnr")
+    
+    # def train_step(self, inputs):
+    #     # Get the image and the rays)
+    #     (images, rays) = inputs
+    #     l_xyz = int((ops.shape(self.coarse_model.inputs[0])[-1] - 3) / 6)
+    #     l_dir = int((ops.shape(self.coarse_model.inputs[1])[-1] - 3) / 6)
+    #     (ray_origins, ray_directions, rays_flat, dirs_flat, t_vals) = rays
+
+    #     # Get image dimensions
+    #     h, w = ops.shape(images)[1:3]
+
+    #     with tf.GradientTape() as tape:
+    #         # Get the predictions from the model
+    #         rgbs, _, _ = self.forward_render(ray_origins, ray_directions, t_vals, h, w, l_xyz, l_dir, training=True)
+    #         rgb_coarse, rgb_fine = rgbs
+
+    #         loss_coarse = self.loss_fn(images, rgb_coarse)
+    #         loss_fine = self.loss_fn(images, rgb_fine)
+
+    #         loss = loss_coarse + loss_fine
+
+        
+    #     # Apply gradient updates for the model
+    #     tv_nerf = self.coarse_model.trainable_variables + self.fine_model.trainable_variables
+    #     grads = tape.gradient(loss, tv_nerf)
+    #     self.optimizer.apply_gradients(zip(grads, tv_nerf))
+
+    #     # Get the PSNR of the reconstructed images and the source images
+    #     psnr = ops.psnr(images, rgb_fine, max_val=1.0)
+
+    #     # Compute the metrics
+    #     self.loss_coarse_tracker.update_state(loss_coarse)
+    #     self.loss_tracker.update_state(loss_fine)
+    #     self.psnr_tracker.update_state(psnr)
+    #     return {
+    #         "loss_coarse": self.loss_coarse_tracker.result(),
+    #         "loss": self.loss_tracker.result(),
+    #         "psnr": self.psnr_tracker.result(),
+    #     }
     
     def train_step(self, inputs):
         # Get the image and the rays)
@@ -140,14 +181,14 @@ class NeRFTrainer(keras.Model):
             # Get the predictions from the model
             predictions = self.coarse_model([rays_flat, dirs_flat], training=True)
             predictions_coarse = ops.reshape(predictions, (-1, h, w, self.ns_coarse, 4))
-            rgb_coarse, depth_coarse = render_predictions(predictions_coarse, t_vals, rand=True)
+            rgb_coarse, _, weight_coarse = render_predictions(predictions_coarse, t_vals, rand=True)
             loss_coarse = self.loss_fn(images, rgb_coarse)
 
         # Compute middle values of t_vals for sampling
         t_vals_coarse_mid = (0.5 * (t_vals[..., 1:] + t_vals[..., :-1]))
 
         # Apply hierarchical sampling and get the t_vals for fine model
-        t_vals_fine = sample_pdf(t_vals_coarse_mid, depth_coarse[..., None], self.ns_fine)
+        t_vals_fine = sample_pdf(t_vals_coarse_mid, weight_coarse, self.ns_fine)
         t_vals_fine_all = ops.sort(ops.concatenate([t_vals, t_vals_fine], axis=-1), axis=-1)
 
         rays_flat_fine, dirs_flat_fine = sample_rays_flat(ray_origins, ray_directions, t_vals_fine_all, l_xyz, l_dir)
@@ -156,10 +197,10 @@ class NeRFTrainer(keras.Model):
             # Get the predictions from the model
             predictions_fine = self.fine_model([rays_flat_fine, dirs_flat_fine], training=True)
             predictions_fine = ops.reshape(predictions_fine, (-1, h, w, self.ns_fine + self.ns_coarse, 4))
-            rgb_fine, depth_fine = render_predictions(predictions_fine, t_vals_fine_all, rand=True)
+            rgb_fine, _, _ = render_predictions(predictions_fine, t_vals_fine_all, rand=True)
             loss_fine = self.loss_fn(images, rgb_fine)
 
-
+        
         # Apply gradient updates for the course model
         tv_coarse = self.coarse_model.trainable_variables
         grads_coarse = coarse_tape.gradient(loss_coarse, tv_coarse)
@@ -169,6 +210,7 @@ class NeRFTrainer(keras.Model):
         tv_fine = self.fine_model.trainable_variables
         grads_fine = fine_tape.gradient(loss_fine, tv_fine)
         self.optimizer_fine.apply_gradients(zip(grads_fine, tv_fine))
+
 
         # Get the PSNR of the reconstructed images and the source images
         psnr = ops.psnr(images, rgb_fine, max_val=1.0)
@@ -193,24 +235,28 @@ class NeRFTrainer(keras.Model):
         # Get image dimensions
         h, w = ops.shape(images)[1:3]
 
-        # Get the predictions from the model.
-        predictions = self.coarse_model([rays_flat, dirs_flat], training=False)
-        predictions_coarse = ops.reshape(predictions, (-1, h, w, self.ns_coarse, 4))
-        rgb_coarse, depth_coarse = render_predictions(predictions_coarse, t_vals, rand=True)
+        rgbs, _, _ = self.forward_render(ray_origins, ray_directions, t_vals, h, w, l_xyz, l_dir, training=False)
+
+        (rgb_coarse, rgb_fine) = rgbs
+
+        # # Get the predictions from the model.
+        # predictions = self.coarse_model([rays_flat, dirs_flat], training=False)
+        # predictions_coarse = ops.reshape(predictions, (-1, h, w, self.ns_coarse, 4))
+        # rgb_coarse, depth_coarse = render_predictions(predictions_coarse, t_vals, rand=True)
         loss_coarse = self.loss_fn(images, rgb_coarse)
 
-        # Compute middle values of t_vals for sampling
-        t_vals_coarse_mid = (0.5 * (t_vals[..., 1:] + t_vals[..., :-1]))
+        # # Compute middle values of t_vals for sampling
+        # t_vals_coarse_mid = (0.5 * (t_vals[..., 1:] + t_vals[..., :-1]))
 
-        # Apply hierarchical sampling and get the t_vals for fine model
-        t_vals_fine = sample_pdf(t_vals_coarse_mid, depth_coarse[..., None], self.ns_fine)
-        t_vals_fine_all = ops.sort(ops.concatenate([t_vals, t_vals_fine], axis=-1), axis=-1)
+        # # Apply hierarchical sampling and get the t_vals for fine model
+        # t_vals_fine = sample_pdf(t_vals_coarse_mid, depth_coarse[..., None], self.ns_fine)
+        # t_vals_fine_all = ops.sort(ops.concatenate([t_vals, t_vals_fine], axis=-1), axis=-1)
 
-        rays_flat_fine, dirs_flat_fine = sample_rays_flat(ray_origins, ray_directions, t_vals_fine_all, l_xyz, l_dir)
+        # rays_flat_fine, dirs_flat_fine = sample_rays_flat(ray_origins, ray_directions, t_vals_fine_all, l_xyz, l_dir)
 
-        predictions_fine = self.fine_model([rays_flat_fine, dirs_flat_fine], training=False)
-        predictions_fine = ops.reshape(predictions_fine, (-1, h, w, self.ns_fine + self.ns_coarse, 4))
-        rgb_fine, depth_fine = render_predictions(predictions_fine, t_vals_fine_all, rand=True)
+        # predictions_fine = self.fine_model([rays_flat_fine, dirs_flat_fine], training=False)
+        # predictions_fine = ops.reshape(predictions_fine, (-1, h, w, self.ns_fine + self.ns_coarse, 4))
+        # rgb_fine, depth_fine = render_predictions(predictions_fine, t_vals_fine_all, rand=True)
         loss_fine = self.loss_fn(images, rgb_fine)
 
         # Get the PSNR of the reconstructed images and the source images.
@@ -230,6 +276,25 @@ class NeRFTrainer(keras.Model):
     @property
     def metrics(self):
         return [self.loss_tracker, self.psnr_tracker]
+    
+    def forward_render(self, ray_origins, ray_directions, t_vals, height, width, l_xyz, l_dir, training=False):
+        rays_flat, dirs_flat = sample_rays_flat(ray_origins, ray_directions, t_vals, l_xyz, l_dir)
+        predictions = self.coarse_model([rays_flat, dirs_flat], training=training)
+        predictions_coarse = ops.reshape(predictions, (-1, height, width, self.ns_coarse, 4))
+        rgb_coarse, depth_coarse, weights_coarse = render_predictions(predictions_coarse, t_vals, rand=True)
+
+        t_vals_coarse_mid = (0.5 * (t_vals[..., 1:] + t_vals[..., :-1]))
+
+        t_vals_fine = sample_pdf(t_vals_coarse_mid, weights_coarse, self.ns_fine)
+        t_vals_fine_all = ops.sort(ops.concatenate([t_vals, t_vals_fine], axis=-1), axis=-1)
+
+        rays_flat_fine, dirs_flat_fine = sample_rays_flat(ray_origins, ray_directions, t_vals_fine_all, l_xyz, l_dir)
+
+        predictions_fine = self.fine_model([rays_flat_fine, dirs_flat_fine], training=training)
+        predictions_fine = ops.reshape(predictions_fine, (-1, height, width, self.ns_fine + self.ns_coarse, 4))
+        rgb_fine, depth_fine, weights_fine = render_predictions(predictions_fine, t_vals_fine_all, rand=True)
+
+        return (rgb_coarse, rgb_fine), (depth_coarse, depth_fine), (weights_coarse, weights_fine)
 
 class NeRF(keras.Model):
     def __init__(self, nerf_model, batch_size, num_samples):

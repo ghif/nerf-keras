@@ -14,9 +14,9 @@ def encode_position(x, pos_encode_dims):
     """
     positions = [x]
     for i in range(pos_encode_dims):
-        for fn in [keras.ops.sin, keras.ops.cos]:
+        for fn in [ops.sin, ops.cos]:
             positions.append(fn(2.0**i * x))
-    return keras.ops.concatenate(positions, axis=-1)
+    return ops.concatenate(positions, axis=-1)
 
 def get_rays(height, width, focal, pose):
     """Computes origin point and direction vector of rays.
@@ -30,22 +30,22 @@ def get_rays(height, width, focal, pose):
     Returns:
         Tuple of origin point and direction vector for rays.
     """
-    i, j = keras.ops.meshgrid(
-        keras.ops.arange(width, dtype="float32"),
-        keras.ops.arange(height, dtype="float32"),
+    i, j = ops.meshgrid(
+        ops.arange(width, dtype="float32"),
+        ops.arange(height, dtype="float32"),
         indexing="xy",
     )
     transformed_i = (i - width * 0.5) / focal
     transformed_j = (j - height * 0.5) / focal
-    directions = keras.ops.stack(
-        [transformed_i, -transformed_j, -keras.ops.ones_like(i)], axis=-1
+    directions = ops.stack(
+        [transformed_i, -transformed_j, -ops.ones_like(i)], axis=-1
     )
     camera_matrix = pose[:3, :3]
     height_width_focal = pose[:3, -1]
     transformed_dirs = directions[..., None, :]
     camera_dirs = transformed_dirs * camera_matrix
-    ray_directions = keras.ops.sum(camera_dirs, axis=-1)
-    ray_origins = keras.ops.broadcast_to(height_width_focal, keras.ops.shape(ray_directions))
+    ray_directions = ops.sum(camera_dirs, axis=-1)
+    ray_origins = ops.broadcast_to(height_width_focal, ops.shape(ray_directions))
     return (ray_origins, ray_directions)
 
 def flatten_and_encode(samples, pos_encode_dims):
@@ -108,18 +108,18 @@ def render_flat_rays(
     Returns:
        Tuple of flattened rays and sample points on each rays.
     """
-    t_vals = keras.ops.linspace(near, far, num_samples)
+    t_vals = ops.linspace(near, far, num_samples)
     shape = list(ray_origins.shape[:-1]) + [num_samples]
     if rand:
         noise = keras.random.uniform(shape=shape) * (far - near) / num_samples
         t_vals = t_vals + noise
     else:
-        t_vals = keras.ops.broadcast_to(t_vals, shape)
+        t_vals = ops.broadcast_to(t_vals, shape)
 
     rays = ray_origins[..., None, :] + (
         ray_directions[..., None, :] * t_vals[..., None]
     )
-    rays_flat = keras.ops.reshape(rays, [-1, 3])
+    rays_flat = ops.reshape(rays, [-1, 3])
     rays_flat = encode_position(rays_flat, pos_encode_dims)
     return (rays_flat, t_vals)
 
@@ -172,7 +172,7 @@ def render_predictions(predictions, t_vals, rand=True):
     else:
         depth_map = ops.sum(weights * t_vals[:, None, None], axis=-1)
 
-    return (rgb, depth_map)
+    return (rgb, depth_map, weights)
 
 def create_preprocess_image_fn(target_height, target_width):
     """Creates a preprocessing function for images.
