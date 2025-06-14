@@ -330,9 +330,7 @@ class NeRF(keras.Model):
                 train=True
             )
             loss = self.loss_fn(images, rgb)
-        
-        print(f"[NeRF train step] rgb : {tf.print(rgb[0, 0, 0])}")
-        print(f"[NeRF train step] loss : {tf.print(loss)}")
+    
 
         # Get the trainable variables
         trainable_vars = self.nerf_model.trainable_variables
