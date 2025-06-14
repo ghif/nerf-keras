@@ -4,6 +4,7 @@ os.environ["KERAS_BACKEND"] = "tensorflow"
 # Setting random seed to obtain reproducible results.
 import tensorflow as tf
 
+
 import keras
 
 import io
@@ -129,7 +130,6 @@ optimizer=keras.optimizers.AdamW(
     learning_rate=LEARNING_RATE
 )
 model.compile(
-    # optimizer=keras.optimizers.Adam(),
     optimizer=optimizer,
     loss_fn=keras.losses.MeanSquaredError(),
 )
@@ -173,6 +173,10 @@ class TrainCallback(keras.callbacks.Callback):
             rand=True,
             train=False,
         )
+
+        print(f"Test recons images: {test_recons_images[0, 0, 0]} -- ({np.min(test_recons_images)}, {np.max(test_recons_images)})")
+
+        print(f"Depth maps: {depth_maps[0, 0, 0]} -- ({np.min(depth_maps)}, {np.max(depth_maps)})")
 
         # Save weights of self.model.nerf_model
         if WITH_GCS:
@@ -251,6 +255,5 @@ model.fit(
     train_ds,
     validation_data=val_ds,
     epochs=EPOCHS,
-    # batch_size=BATCH_SIZE,
     callbacks=[TrainCallback()],
 )

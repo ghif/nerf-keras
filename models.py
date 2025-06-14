@@ -66,7 +66,6 @@ def render_rgb_depth(model, rays_flat, t_vals, batch_size, h, w, num_samples, ra
     """
     # Get the predictions from the nerf model and reshape it.
     predictions = model(rays_flat, training=train)
-
     predictions = ops.reshape(predictions, (batch_size, h, w, num_samples, 4))
 
     # Slice the predictions into rgb and sigma.
@@ -331,6 +330,9 @@ class NeRF(keras.Model):
                 train=True
             )
             loss = self.loss_fn(images, rgb)
+        
+        print(f"[NeRF train step] rgb : {tf.print(rgb[0, 0, 0])}")
+        print(f"[NeRF train step] loss : {tf.print(loss)}")
 
         # Get the trainable variables
         trainable_vars = self.nerf_model.trainable_variables
@@ -370,7 +372,8 @@ class NeRF(keras.Model):
             h=h,
             w=w,
             num_samples=self.num_samples,
-            rand=True
+            rand=True,
+            train=False
         )
         loss = self.loss_fn(images, rgb)
 
