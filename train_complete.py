@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 import json
 import argparse
 
-from data_utils import split_data, create_tiny_dataset_pipeline, sample_pdf, sample_rays_flat
-from models import create_nerf_complete_model, NeRFTrainer, render_predictions
+from data_utils import split_data, create_tiny_dataset_pipeline
+from models import create_nerf_complete_model, NeRFTrainer
 
 # tf.random.set_seed(42)
 keras.utils.set_random_seed(42)
@@ -147,19 +147,11 @@ nerf_trainer = NeRFTrainer(
     ns_coarse=NS_COARSE,
     ns_fine=NS_FINE
 )
-# optimizer_coarse = keras.optimizers.AdamW(
-#     learning_rate=LEARNING_RATE
-# )
 
-# optimizer_fine = keras.optimizers.AdamW(
-#     learning_rate=LEARNING_RATE
-# )
 optimizer = keras.optimizers.Adam(
     learning_rate=LEARNING_RATE
 )
 nerf_trainer.compile(
-    # optimizer_coarse=optimizer_coarse,
-    # optimizer_fine=optimizer_fine,
     optimizer=optimizer,
     loss_fn=keras.losses.MeanSquaredError(),
 )
