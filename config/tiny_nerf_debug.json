@@ -6,7 +6,7 @@
     "POS_ENCODE_DIMS": 14,
     "NUM_LAYERS": 8,
     "HIDDEN_DIM": 256,
-    "EPOCHS": 2,
+    "EPOCHS": 100,
     "LEARNING_RATE": 0.0005,
     "WITH_GCS": false
 }

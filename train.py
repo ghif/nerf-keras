@@ -161,10 +161,11 @@ class TrainCallback(keras.callbacks.Callback):
         history["losses"] = loss_list
         history["psnrs"] = psnr_list
 
-        predictions = self.model.nerf_model(train_rays_flat, training=False)
+        # predictions = self.model.nerf_model(val_rays_flat, training=False)
+        predictions = self.model.nerf_model.predict(val_rays_flat)
         predictions = ops.reshape(predictions, (-1, H, W, NUM_SAMPLES, 4))
         print(f"Predictions: {predictions[0, 0, 0]} -- ({np.min(predictions)}, {np.max(predictions)})")
-        test_recons_images, depth_maps, _ = render_predictions(predictions, train_t_vals, rand=True)
+        test_recons_images, depth_maps, _ = render_predictions(predictions, val_t_vals, rand=True)
         
         # test_recons_images, depth_maps = render_rgb_depth(
         #     self.model.nerf_model,

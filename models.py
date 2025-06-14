@@ -366,6 +366,7 @@ class NeRF(keras.Model):
 
         # Get the predictions from the model.
         predictions = self.nerf_model(rays_flat, training=False)
+        # predictions = self.nerf_model.predict(rays_flat)
         predictions = ops.reshape(predictions, (-1, h, w, self.num_samples, 4))
         rgb, _, _ = render_predictions(predictions, t_vals, rand=True)
         # rgb, _ = render_rgb_depth(
