@@ -72,6 +72,20 @@ def sample_rays_flat(ray_origins, ray_directions, t_vals, l_xyz, l_dir):
 def render_rays(
     ray_origins, ray_directions, near, far, num_samples, l_xyz, l_dir, rand=False
 ):
+    """Renders the rays and flattens it.
+
+    Args:
+        ray_origins: The origin points for rays.
+        ray_directions: The direction unit vectors for the rays.
+        near: The near bound of the volumetric scene.
+        far: The far bound of the volumetric scene.
+        num_samples: Number of sample points in a ray.
+        l_xyz: Dimensions for positional encoding of xyz coordinates.
+        l_dir: Dimensions for positional encoding of direction vectors.
+        rand: Choice for randomising the sampling strategy.
+    Returns:
+        Tuple of flattened rays, direction vectors and sample points on each rays.
+    """
     t_vals = ops.linspace(near, far, num_samples)
     shape = list(ray_origins.shape[:-1]) + [num_samples]
     if rand:
@@ -124,16 +138,12 @@ def render_flat_rays(
     return (rays_flat, t_vals)
 
 def render_predictions(predictions, t_vals, rand=True):
-    """Generates the RGB image and depth map from model prediction.
+    """Volume rendering: Generates the RGB image and depth map from the model predictions.
 
     Args:
-        model: The MLP model that is trained to predict the rgb and
-            volume density of the volumetric scene.
-        rays_flat: The flattened rays that serve as the input to
-            the NeRF model.
-        t_vals: The sample points for the rays.
-        rand: Choice to randomise the sampling strategy.
-        train: Whether the model is in the training or testing phase.
+        predictions: Model predictions of shape (batch_size, h, w, num_samples, 4).
+        t_vals: Sampled points on each ray of shape (batch_size, num_samples).
+        rand: Boolean indicating whether to use random sampling.
 
     Returns:
         Tuple of rgb image and depth map.
@@ -147,7 +157,6 @@ def render_predictions(predictions, t_vals, rand=True):
 
     # Get the distance of adjacent intervals.
     delta = t_vals[..., 1:] - t_vals[..., :-1]
-    # delta shape = (num_samples)
     if rand:
         delta = ops.concatenate(
             [delta, ops.broadcast_to([1e10], shape=(batch_size, h, w, 1))], axis=-1
@@ -410,21 +419,21 @@ def sample_pdf(t_vals_mid, weights, ns_fine):
     # define the boundaries
     below = tf.maximum(0, indices-1)
     above = tf.minimum(cdf.shape[-1]-1, indices)
-    indicesG = tf.stack([below, above], axis=-1)
+    indices_g = tf.stack([below, above], axis=-1)
 
     # gather the cdf according to the indices
-    cdfG = tf.gather(cdf, indicesG, axis=-1,
-        batch_dims=len(indicesG.shape)-2)
+    cdf_g = tf.gather(cdf, indices_g, axis=-1,
+        batch_dims=len(indices_g.shape)-2)
 
     # gather the tVals according to the indices
-    tValsMidG = tf.gather(t_vals_mid, indicesG, axis=-1,
-        batch_dims=len(indicesG.shape)-2)
+    t_vals_mid_g = tf.gather(t_vals_mid, indices_g, axis=-1,
+        batch_dims=len(indices_g.shape)-2)
     # create the samples by inverting the cdf
-    denom = cdfG[..., 1] - cdfG[..., 0]
+    denom = cdf_g[..., 1] - cdf_g[..., 0]
     denom = tf.where(denom < 1e-5, tf.ones_like(denom), denom)
-    t = (u - cdfG[..., 0]) / denom
-    samples = (tValsMidG[..., 0] + t * 
-        (tValsMidG[..., 1] - tValsMidG[..., 0]))
+    t = (u - cdf_g[..., 0]) / denom
+    samples = (t_vals_mid_g[..., 0] + t * 
+        (t_vals_mid_g[..., 1] - t_vals_mid_g[..., 0]))
 
     # return the samples
     return samples

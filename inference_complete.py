@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import imageio.v2 as imageio
 
-from data_utils import split_data, create_tiny_dataset_pipeline, render_predictions, sample_rays_flat, get_rays, render_rays
+from data_utils import split_data, create_tiny_dataset_pipeline, get_rays, render_rays
 from models import create_nerf_complete_model, NeRFTrainer
 
 parser = argparse.ArgumentParser()
