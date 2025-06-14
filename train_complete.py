@@ -59,10 +59,10 @@ GCS_IMAGE_DIR = f"gs://{GCS_BUCKET_NAME}/nerf/images"
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 if WITH_GCS:
-    checkpoint_dir = os.path.join(GCS_MODEL_DIR, f"tinynerf-keras-{current_time}")
-    visualization_dir = os.path.join(GCS_IMAGE_DIR, f"tinynerf-keras-{current_time}")
+    checkpoint_dir = os.path.join(GCS_MODEL_DIR, f"tinynerf-complete-keras-{current_time}")
+    visualization_dir = os.path.join(GCS_IMAGE_DIR, f"tinynerf-complete-keras-{current_time}")
 else:
-    checkpoint_dir = os.path.join(MODEL_DIR, f"tinynerf-keras-{current_time}")
+    checkpoint_dir = os.path.join(MODEL_DIR, f"tinynerf-complete-keras-{current_time}")
 
 
 # Download the dataset if it does not exist.

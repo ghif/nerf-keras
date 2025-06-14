@@ -32,7 +32,7 @@ def create_nerf_complete_model(num_layers, hidden_dim, skip_layer, lxyz, ldir):
             x = layers.concatenate([x, ray_input], axis=-1)
         
     # Get the sigma value
-    sigma = layers.Dense(1, activation='relu')(x)
+    sigma = layers.Dense(1)(x)
 
     # Create a feature vector
     feature = layers.Dense(hidden_dim)(x)
@@ -42,7 +42,7 @@ def create_nerf_complete_model(num_layers, hidden_dim, skip_layer, lxyz, ldir):
     x = layers.Dense(hidden_dim//2, activation='relu')(feature)
 
     # Get the rgb value
-    rgb = layers.Dense(3, activation='sigmoid')(x)
+    rgb = layers.Dense(3)(x)
 
     outputs = layers.concatenate([rgb, sigma], axis=-1)
 
@@ -322,16 +322,8 @@ class NeRF(keras.Model):
             predictions = self.nerf_model(rays_flat, training=True)
             predictions = ops.reshape(predictions, (-1, h, w, self.num_samples, 4))
             rgb, _, _ = render_predictions(predictions, t_vals, rand=True)
-            # rgb, _ = render_rgb_depth(
-            #     self.nerf_model, 
-            #     rays_flat, t_vals, 
-            #     batch_size=self.batch_size,
-            #     h=h,
-            #     w=w,
-            #     num_samples=self.num_samples,
-            #     rand=True,
-            #     train=True
-            # )
+
+            # Compute the loss
             loss = self.loss_fn(images, rgb)
     
 
@@ -345,7 +337,6 @@ class NeRF(keras.Model):
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
 
         # Get the PSNR of the reconstructed images and the source images
-        # psnr = tf.image.psnr(images, rgb, max_val=1.0)
         psnr = ops.psnr(images, rgb, max_val=1.0)
 
         # Compute the metrics
@@ -366,20 +357,8 @@ class NeRF(keras.Model):
 
         # Get the predictions from the model.
         predictions = self.nerf_model(rays_flat, training=False)
-        # predictions = self.nerf_model.predict(rays_flat)
         predictions = ops.reshape(predictions, (-1, h, w, self.num_samples, 4))
         rgb, _, _ = render_predictions(predictions, t_vals, rand=True)
-        # rgb, _ = render_rgb_depth(
-        #     model=self.nerf_model, 
-        #     rays_flat=rays_flat, 
-        #     t_vals=t_vals, 
-        #     batch_size=self.batch_size,
-        #     h=h,
-        #     w=w,
-        #     num_samples=self.num_samples,
-        #     rand=True,
-        #     train=False
-        # )
         loss = self.loss_fn(images, rgb)
 
         # Get the PSNR of the reconstructed images and the source images.
