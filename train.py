@@ -4,8 +4,8 @@ os.environ["KERAS_BACKEND"] = "tensorflow"
 # Setting random seed to obtain reproducible results.
 import tensorflow as tf
 
-
 import keras
+from keras import ops
 
 import io
 import datetime
@@ -16,7 +16,7 @@ import json
 import argparse
 
 from data_utils import split_data, create_dataset_pipeline
-from models import create_nerf_model, NeRF, render_rgb_depth
+from models import create_nerf_model, NeRF, render_rgb_depth, render_predictions
 
 # tf.random.set_seed(42)
 keras.utils.set_random_seed(42)
@@ -161,18 +161,22 @@ class TrainCallback(keras.callbacks.Callback):
         history["losses"] = loss_list
         history["psnrs"] = psnr_list
 
+        predictions = self.model.nerf_model(train_rays_flat, training=False)
+        predictions = ops.reshape(predictions, (-1, H, W, NUM_SAMPLES, 4))
+        print(f"Predictions: {predictions[0, 0, 0]} -- ({np.min(predictions)}, {np.max(predictions)})")
+        test_recons_images, depth_maps, _ = render_predictions(predictions, train_t_vals, rand=True)
         
-        test_recons_images, depth_maps = render_rgb_depth(
-            self.model.nerf_model,
-            val_rays_flat,
-            val_t_vals,
-            BATCH_SIZE,
-            H,
-            W,
-            NUM_SAMPLES,
-            rand=True,
-            train=False,
-        )
+        # test_recons_images, depth_maps = render_rgb_depth(
+        #     self.model.nerf_model,
+        #     val_rays_flat,
+        #     val_t_vals,
+        #     BATCH_SIZE,
+        #     H,
+        #     W,
+        #     NUM_SAMPLES,
+        #     rand=True,
+        #     train=False,
+        # )
 
         print(f"Test recons images: {test_recons_images[0, 0, 0]} -- ({np.min(test_recons_images)}, {np.max(test_recons_images)})")
 

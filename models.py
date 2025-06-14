@@ -319,16 +319,19 @@ class NeRF(keras.Model):
 
         with tf.GradientTape() as tape:
             # Get the predictions from the model
-            rgb, _ = render_rgb_depth(
-                self.nerf_model, 
-                rays_flat, t_vals, 
-                batch_size=self.batch_size,
-                h=h,
-                w=w,
-                num_samples=self.num_samples,
-                rand=True,
-                train=True
-            )
+            predictions = self.nerf_model(rays_flat, training=True)
+            predictions = ops.reshape(predictions, (-1, h, w, self.num_samples, 4))
+            rgb, _, _ = render_predictions(predictions, t_vals, rand=True)
+            # rgb, _ = render_rgb_depth(
+            #     self.nerf_model, 
+            #     rays_flat, t_vals, 
+            #     batch_size=self.batch_size,
+            #     h=h,
+            #     w=w,
+            #     num_samples=self.num_samples,
+            #     rand=True,
+            #     train=True
+            # )
             loss = self.loss_fn(images, rgb)
     
 
@@ -362,17 +365,20 @@ class NeRF(keras.Model):
         h, w = ops.shape(images)[1:3]
 
         # Get the predictions from the model.
-        rgb, _ = render_rgb_depth(
-            model=self.nerf_model, 
-            rays_flat=rays_flat, 
-            t_vals=t_vals, 
-            batch_size=self.batch_size,
-            h=h,
-            w=w,
-            num_samples=self.num_samples,
-            rand=True,
-            train=False
-        )
+        predictions = self.nerf_model(rays_flat, training=False)
+        predictions = ops.reshape(predictions, (-1, h, w, self.num_samples, 4))
+        rgb, _, _ = render_predictions(predictions, t_vals, rand=True)
+        # rgb, _ = render_rgb_depth(
+        #     model=self.nerf_model, 
+        #     rays_flat=rays_flat, 
+        #     t_vals=t_vals, 
+        #     batch_size=self.batch_size,
+        #     h=h,
+        #     w=w,
+        #     num_samples=self.num_samples,
+        #     rand=True,
+        #     train=False
+        # )
         loss = self.loss_fn(images, rgb)
 
         # Get the PSNR of the reconstructed images and the source images.
