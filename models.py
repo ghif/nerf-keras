@@ -297,4 +297,3 @@ class NeRF(keras.Model):
     @property
     def metrics(self):
         return [self.loss_tracker, self.psnr_tracker]
-    
