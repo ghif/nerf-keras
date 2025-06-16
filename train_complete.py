@@ -182,7 +182,7 @@ class TrainCallback(keras.callbacks.Callback):
         history["losses"] = loss_list
         history["psnrs"] = psnr_list
 
-        rgbs, depths, weights = self.model.forward_render(val_ray_origins, val_ray_directions, val_t_vals, H, W, L_XYZ, L_DIR, training=False)
+        rgbs, depths, _, _ = self.model.forward_render(val_ray_origins, val_ray_directions, val_t_vals, H, W, L_XYZ, L_DIR, training=False)
 
         (_, test_recons_images) = rgbs
         (_, depth_maps) = depths
