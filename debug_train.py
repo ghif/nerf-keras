@@ -168,14 +168,13 @@ rays_tuple_shape = (ray_origins_shape, ray_directions_shape, rays_flat_shape, di
 input_shape_for_build = (images_shape, rays_tuple_shape)
 nerf_trainer.build(input_shape=input_shape_for_build)
 
-# nerf_trainer.fit(
-#     train_ds,
-#     validation_data=val_ds,
-#     epochs=EPOCHS,
-#     callbacks=[TrainCallback()],
-# )
+nerf_trainer.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=EPOCHS,
+)
 
-rgbs, depths, weights = nerf_trainer.forward_render(val_ray_origins, val_ray_directions, val_t_vals, H, W, L_XYZ, L_DIR, training=False)
-rgbs_coarse, rgbs_fine = rgbs
-print(f"rgbs coarse ({ops.min(rgbs_coarse)}, {ops.max(rgbs_coarse)}): {rgbs_coarse[0, :3, :3]}")
-print(f"rgbs fine ({ops.min(rgbs_fine)}, {ops.max(rgbs_fine)}): {rgbs_fine[0, :3, :3]}")
+# rgbs, depths, weights = nerf_trainer.forward_render(val_ray_origins, val_ray_directions, val_t_vals, H, W, L_XYZ, L_DIR, training=False)
+# rgbs_coarse, rgbs_fine = rgbs
+# print(f"rgbs coarse ({ops.min(rgbs_coarse)}, {ops.max(rgbs_coarse)}): {rgbs_coarse[0, :3, :3]}")
+# print(f"rgbs fine ({ops.min(rgbs_fine)}, {ops.max(rgbs_fine)}): {rgbs_fine[0, :3, :3]}")
