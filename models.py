@@ -141,7 +141,7 @@ class NeRFTrainer(keras.Model):
             # Get the predictions from the model
             rgbs, _, _ = self.forward_render(ray_origins, ray_directions, t_vals, h, w, l_xyz, l_dir, training=True)
             rgb_coarse, rgb_fine = rgbs
-            tf.print("[NeRFTrainer: train_step] rgb coarse (", ops.min(rgb_coarse), ", ", ops.max(rgb_coarse), "): ", rgb_coarse[0, :2, :2])
+            # tf.print("[NeRFTrainer: train_step] rgb coarse (", ops.min(rgb_coarse), ", ", ops.max(rgb_coarse), "): ", rgb_coarse[0, :2, :2])
             # tf.print(f"[NeRFTrainer: train_step] rgb fine ({ops.min(rgb_fine)}, {ops.max(rgb_fine)}): {rgb_fine[0, :3, :3]}")
 
             loss_coarse = self.loss_fn(images, rgb_coarse)
