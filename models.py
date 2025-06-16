@@ -139,7 +139,7 @@ class NeRFTrainer(keras.Model):
 
         with tf.GradientTape() as tape:
             # Get the predictions from the model
-            rgbs, _, _ = self.forward_render(ray_origins, ray_directions, t_vals, h, w, l_xyz, l_dir, training=True)
+            rgbs, _, _, _ = self.forward_render(ray_origins, ray_directions, t_vals, h, w, l_xyz, l_dir, training=True)
             rgb_coarse, rgb_fine = rgbs
             # tf.print("[NeRFTrainer: train_step] rgb coarse (", ops.min(rgb_coarse), ", ", ops.max(rgb_coarse), "): ", rgb_coarse[0, :2, :2])
             # tf.print(f"[NeRFTrainer: train_step] rgb fine ({ops.min(rgb_fine)}, {ops.max(rgb_fine)}): {rgb_fine[0, :3, :3]}")
@@ -177,7 +177,7 @@ class NeRFTrainer(keras.Model):
 
         # Get image dimensions
         h, w = ops.shape(images)[1:3]
-        rgbs, _, _ = self.forward_render(ray_origins, ray_directions, t_vals, h, w, l_xyz, l_dir, training=False)
+        rgbs, _, _, _ = self.forward_render(ray_origins, ray_directions, t_vals, h, w, l_xyz, l_dir, training=False)
         (rgb_coarse, rgb_fine) = rgbs
 
         loss_coarse = self.loss_fn(images, rgb_coarse)
@@ -217,7 +217,7 @@ class NeRFTrainer(keras.Model):
         predictions_fine = ops.reshape(predictions_fine, (-1, height, width, self.ns_fine + self.ns_coarse, 4))
         rgb_fine, depth_fine, weights_fine = render_predictions(predictions_fine, t_vals_fine_all, rand=True)
 
-        return (rgb_coarse, rgb_fine), (depth_coarse, depth_fine), (weights_coarse, weights_fine)
+        return (rgb_coarse, rgb_fine), (depth_coarse, depth_fine), (weights_coarse, weights_fine), (predictions_coarse, predictions_fine)
 
 class NeRF(keras.Model):
     def __init__(self, nerf_model, batch_size, num_samples):

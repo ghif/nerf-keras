@@ -168,10 +168,34 @@ rays_tuple_shape = (ray_origins_shape, ray_directions_shape, rays_flat_shape, di
 input_shape_for_build = (images_shape, rays_tuple_shape)
 nerf_trainer.build(input_shape=input_shape_for_build)
 
+class TrainCallback(keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        """Saves images at the end of each epoch."""
+        print(f"TrainCallback: Epoch {epoch + 1} ended with logs: {logs}")
+
+        loss_coarse = logs["loss_coarse"]
+        loss = logs["loss"]
+        psnr = logs["psnr"]
+
+        rgbs, depths, weights, preds = self.model.forward_render(val_ray_origins, val_ray_directions, val_t_vals, H, W, L_XYZ, L_DIR, training=False)
+
+        (rgbs_coarse, rgbs_fine) = rgbs
+        (depths_coarse, depths_fine) = depths
+        (preds_coarse, preds_fine) = preds
+
+        print(f"preds_coarse ({ops.min(preds_coarse)}, {ops.max(preds_coarse)}): {preds_coarse[0, :2, :2]}")
+        print(f"preds_fine ({ops.min(preds_fine)}, {ops.max(preds_fine)}): {preds_fine[0, :2, :2]}")
+        print(f"rgbs_coarse ({ops.min(rgbs_coarse)}, {ops.max(rgbs_coarse)}): {rgbs_coarse[0, :2, :2]}")
+        print(f"rgbs_fine ({ops.min(rgbs_fine)}, {ops.max(rgbs_fine)}): {rgbs_fine[0, :2, :2]}")
+        print(f"depths_coarse ({ops.min(depths_coarse)}, {ops.max(depths_coarse)}): {depths_coarse[0, :2, :2]}")
+        print(f"depths_fine ({ops.min(depths_fine)}, {ops.max(depths_fine)}): {depths_fine[0, :2, :2]}")
+        
+
 nerf_trainer.fit(
     train_ds,
     validation_data=val_ds,
     epochs=EPOCHS,
+    callbacks=TrainCallback()
 )
 
 # rgbs, depths, weights = nerf_trainer.forward_render(val_ray_origins, val_ray_directions, val_t_vals, H, W, L_XYZ, L_DIR, training=False)
