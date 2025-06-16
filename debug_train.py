@@ -183,12 +183,12 @@ class TrainCallback(keras.callbacks.Callback):
         (depths_coarse, depths_fine) = depths
         (preds_coarse, preds_fine) = preds
 
-        print(f"preds_coarse ({ops.min(preds_coarse)}, {ops.max(preds_coarse)}): {preds_coarse[0, :2, :2]}")
-        print(f"preds_fine ({ops.min(preds_fine)}, {ops.max(preds_fine)}): {preds_fine[0, :2, :2]}")
-        print(f"rgbs_coarse ({ops.min(rgbs_coarse)}, {ops.max(rgbs_coarse)}): {rgbs_coarse[0, :2, :2]}")
-        print(f"rgbs_fine ({ops.min(rgbs_fine)}, {ops.max(rgbs_fine)}): {rgbs_fine[0, :2, :2]}")
-        print(f"depths_coarse ({ops.min(depths_coarse)}, {ops.max(depths_coarse)}): {depths_coarse[0, :2, :2]}")
-        print(f"depths_fine ({ops.min(depths_fine)}, {ops.max(depths_fine)}): {depths_fine[0, :2, :2]}")
+        print(f"preds_coarse ({ops.min(preds_coarse)}, {ops.max(preds_coarse)})")
+        print(f"preds_fine ({ops.min(preds_fine)}, {ops.max(preds_fine)})")
+        print(f"rgbs_coarse ({ops.min(rgbs_coarse)}, {ops.max(rgbs_coarse)})")
+        print(f"rgbs_fine ({ops.min(rgbs_fine)}, {ops.max(rgbs_fine)})")
+        print(f"depths_coarse ({ops.min(depths_coarse)}, {ops.max(depths_coarse)})")
+        print(f"depths_fine ({ops.min(depths_fine)}, {ops.max(depths_fine)})")
         
 
 nerf_trainer.fit(
