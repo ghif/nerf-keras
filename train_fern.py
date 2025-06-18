@@ -9,13 +9,12 @@ from keras import ops
 
 import io
 import datetime
-import imageio.v2 as imageio
 import numpy as np
 import matplotlib.pyplot as plt
 import json
 import argparse
 
-from data_utils import split_data, create_complete_dataset_pipeline
+from data_utils import create_complete_dataset_pipeline
 from fern_data_utils import load_fern_data
 from models import create_nerf_complete_model, NeRFTrainer
 

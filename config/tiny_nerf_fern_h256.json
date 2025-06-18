@@ -11,6 +11,6 @@
     "SKIP_LAYER": 4,
     "EPOCHS": 1000,
     "LEARNING_RATE": 0.0005,
-    "BATCH_NORM": true,
+    "BATCH_NORM": false,
     "WITH_GCS": false
 }
