@@ -1,15 +1,16 @@
 {
     "BATCH_SIZE": 5,
-    "NS_COARSE": 16,
-    "NS_FINE": 32,
-    "HEIGHT": 25,
-    "WIDTH": 25,
+    "NS_COARSE": 64,
+    "NS_FINE": 128,
+    "HEIGHT": 63,
+    "WIDTH": 84,
     "L_XYZ": 10,
     "L_DIR": 4,
     "NUM_LAYERS": 8,
-    "HIDDEN_DIM": 128,
+    "HIDDEN_DIM": 256,
     "SKIP_LAYER": 4,
-    "EPOCHS": 200,
+    "EPOCHS": 1000,
     "LEARNING_RATE": 0.0005,
+    "BATCH_NORM": true,
     "WITH_GCS": false
 }

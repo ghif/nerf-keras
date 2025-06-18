@@ -16,6 +16,7 @@ import json
 import argparse
 
 from data_utils import split_data, create_complete_dataset_pipeline
+from fern_data_utils import load_fern_data
 from models import create_nerf_complete_model, NeRFTrainer
 
 # tf.random.set_seed(42)
@@ -23,7 +24,7 @@ keras.utils.set_random_seed(42)
 
 # Add argument parser
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", type=str, default="config/tiny_nerf_complete_h256.json")
+parser.add_argument("--config", type=str, default="config/tiny_nerf_fern_debug.json")
 args = parser.parse_args()
 
 # Load config json
@@ -44,6 +45,7 @@ HIDDEN_DIM = conf["HIDDEN_DIM"]
 WITH_GCS = conf["WITH_GCS"]
 H = conf["HEIGHT"]
 W = conf["WIDTH"]
+BATCH_NORM = conf["BATCH_NORM"]
 
 AUTO = tf.data.AUTOTUNE
 
@@ -59,27 +61,33 @@ GCS_IMAGE_DIR = f"gs://{GCS_BUCKET_NAME}/nerf/images"
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 if WITH_GCS:
-    checkpoint_dir = os.path.join(GCS_MODEL_DIR, f"tinynerf-complete-keras-{current_time}")
-    visualization_dir = os.path.join(GCS_IMAGE_DIR, f"tinynerf-complete-keras-{current_time}")
+    checkpoint_dir = os.path.join(GCS_MODEL_DIR, f"tinynerf-fern-keras-{current_time}")
+    visualization_dir = os.path.join(GCS_IMAGE_DIR, f"tinynerf-fern-keras-{current_time}")
 else:
-    checkpoint_dir = os.path.join(MODEL_DIR, f"tinynerf-complete-keras-{current_time}")
+    checkpoint_dir = os.path.join(MODEL_DIR, f"tinynerf-fern-keras-{current_time}")
 
+# Load fern dataset
+datadir =  "data/nerf_example_data/nerf_llff_data/fern"
+images, poses_ori, bds, render_poses, i_test = load_fern_data(datadir, factor=8, recenter=True, bd_factor=.75, spherify=False)
 
-# Download the dataset if it does not exist.
-url = (
-    "http://cseweb.ucsd.edu/~viscomp/projects/LF/papers/ECCV20/nerf/tiny_nerf_data.npz"
-)
-data = keras.utils.get_file(origin=url)
+# Get focal lengths
+_, _, focal = poses_ori[0, :3, -1]
 
-# Load the dataset
-data = np.load(data)
-images = data["images"]
-im_shape = images.shape
-(num_images, _, _, _) = images.shape
-(poses, focal) = (data["poses"], data["focal"])
+# Get c2w matrices
+poses = poses_ori[:, :3, :4]
+
+# Get near-far bounds
+near = np.min(bds) * 0.9
+far = np.max(bds) * 1.
 
 # Split the data into training and validation sets
-train_images, val_images, train_poses, val_poses = split_data(images, poses, split_ratio=0.8)
+i_test = [i_test] 
+i_train = np.array([i for i in range(len(images)) if i not in i_test])
+
+train_images = images[i_train]
+val_images = images[i_test]
+train_poses = poses[i_train]
+val_poses = poses[i_test]
 
 # Make the train dataset pipelines
 train_ds = create_complete_dataset_pipeline(
@@ -93,8 +101,8 @@ train_ds = create_complete_dataset_pipeline(
     L_DIR,
     BATCH_SIZE,
     AUTO,
-    near=2.0,
-    far=6.0,
+    near=near,
+    far=far,
     shuffle=True,
     rand_sampling=True,
 )
@@ -109,10 +117,10 @@ val_ds = create_complete_dataset_pipeline(
     NS_COARSE,
     L_XYZ,
     L_DIR,
-    BATCH_SIZE,
+    1,
     AUTO,
-    near=2.0,
-    far=6.0,
+    near=near,
+    far=far,
     shuffle=False, # Typically, validation data is not shuffled
     rand_sampling=False, # Or True, depending on if you want stochasticity here
 )
@@ -129,7 +137,8 @@ coarse_model = create_nerf_complete_model(
     hidden_dim=HIDDEN_DIM,
     skip_layer=SKIP_LAYER,
     lxyz=L_XYZ,
-    ldir=L_DIR
+    ldir=L_DIR,
+    bn=BATCH_NORM
 )
 
 fine_model = create_nerf_complete_model(
@@ -137,7 +146,8 @@ fine_model = create_nerf_complete_model(
     hidden_dim=HIDDEN_DIM,
     skip_layer=SKIP_LAYER,
     lxyz=L_XYZ,
-    ldir=L_DIR
+    ldir=L_DIR,
+    bn=BATCH_NORM
 )
 
 nerf_trainer = NeRFTrainer(
@@ -193,13 +203,13 @@ class TrainCallback(keras.callbacks.Callback):
                 tf.io.gfile.makedirs(checkpoint_dir)
 
             print(f"Created GCS directory: {checkpoint_dir}")
-            weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_complete_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
+            weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_fern_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
         else:
             if not os.path.exists(checkpoint_dir):
                 os.makedirs(checkpoint_dir)
 
             print(f"Created Local directory: {checkpoint_dir}")
-            weight_path = os.path.join(checkpoint_dir, f"nerf_complete_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
+            weight_path = os.path.join(checkpoint_dir, f"nerf_fern_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
 
         self.model.save_weights(weight_path)
 

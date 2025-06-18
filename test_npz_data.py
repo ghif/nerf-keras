@@ -16,7 +16,7 @@ import json
 import argparse
 
 from data_utils import split_data, create_dataset_pipeline, get_rays, render_flat_rays, encode_position, sample_pdf
-from models import NeRFTrainer, create_nerf_model, render_predictions, create_nerf_complete_model
+from models import create_nerf_model, render_predictions, create_nerf_complete_model
 
 # tf.random.set_seed(42)
 keras.utils.set_random_seed(42)
@@ -121,68 +121,30 @@ coarse_model = create_nerf_complete_model(
 print("Coarse Model Summary:")
 print(coarse_model.summary(expand_nested=True))
 
-fine_model = create_nerf_complete_model(
-    num_layers=NUM_LAYERS,
-    hidden_dim=HIDDEN_DIM,
-    skip_layer=SKIP_LAYER,
-    lxyz=L_XYZ,
-    ldir=L_DIR
-)
-print("Fine Model Summary:")
-print(fine_model.summary(expand_nested=True))
+predictions = coarse_model([rays_flat_encoded_coarse[None, ...], dirs_flat_encoded_coarse[None, ...]], training=False)
 
-nerf_trainer = NeRFTrainer(
-    coarse_model=coarse_model,
-    fine_model=fine_model,
-    batch_size=BATCH_SIZE,
-    ns_coarse=NS_COARSE,
-    ns_fine=NS_FINE
-)
+print(f"Predictions coarse: ({ops.min(predictions)}, {ops.max(predictions)}): {predictions}")
 
-optimizer = keras.optimizers.Adam(
-    learning_rate=LEARNING_RATE
-)
-nerf_trainer.compile(
-    optimizer=optimizer,
-    loss_fn=keras.losses.MeanSquaredError(),
-)
+# Get the predictions from the nerf model and reshape it.
+predictions_coarse = ops.reshape(predictions, (-1, H, W, NS_COARSE, 4))
 
-# Build nerf_trainer
-images_shape = train_imgs.shape[1:]
-ray_origins_shape = train_ray_origins.shape[1:]
-ray_directions_shape = train_ray_directions.shape[1:]
-rays_flat_shape = train_rays_flat.shape[1:]
-dirs_flat_shape = train_dirs_flat.shape[1:]
-t_vals_shape = train_t_vals.shape[1:]
-rays_tuple_shape = (ray_origins_shape, ray_directions_shape, rays_flat_shape, dirs_flat_shape, t_vals_shape)
-input_shape_for_build = (images_shape, rays_tuple_shape)
-nerf_trainer.build(input_shape=input_shape_for_build)
+rgb_coarse, depth_coarse, weight_coarse = render_predictions(predictions_coarse, t_vals_coarse[None, ...], rand=True)
+t_vals_coarse_mid = (0.5 * (t_vals_coarse[..., 1:] + t_vals_coarse[..., :-1]))
+# t_vals_fine = sample_pdf(t_vals_coarse_mid[None, ...], depth_coarse[..., None], NS_FINE)
+t_vals_fine = sample_pdf(t_vals_coarse_mid[None, ...], weight_coarse, NS_FINE)
 
+t_vals_fine_all = ops.sort(ops.concatenate([t_vals_coarse[None, ...], t_vals_fine], axis=-1), axis=-1)
 
-# predictions = coarse_model([rays_flat_encoded_coarse[None, ...], dirs_flat_encoded_coarse[None, ...]], training=False)
+rays_fine = (ray_origins[..., None, :] + ray_directions[..., None, :] * t_vals_fine_all[..., None])
+rays_flat_fine = ops.reshape(rays_fine, [-1, 3])
+rays_flat_encoded_fine = encode_position(rays_flat_fine, L_XYZ)
 
-# print(f"Predictions coarse: ({ops.min(predictions)}, {ops.max(predictions)}): {predictions}")
-
-# # Get the predictions from the nerf model and reshape it.
-# predictions_coarse = ops.reshape(predictions, (-1, H, W, NS_COARSE, 4))
-
-# rgb_coarse, depth_coarse, weight_coarse = render_predictions(predictions_coarse, t_vals_coarse[None, ...], rand=True)
-# t_vals_coarse_mid = (0.5 * (t_vals_coarse[..., 1:] + t_vals_coarse[..., :-1]))
-# # t_vals_fine = sample_pdf(t_vals_coarse_mid[None, ...], depth_coarse[..., None], NS_FINE)
-# t_vals_fine = sample_pdf(t_vals_coarse_mid[None, ...], weight_coarse, NS_FINE)
-
-# t_vals_fine_all = ops.sort(ops.concatenate([t_vals_coarse[None, ...], t_vals_fine], axis=-1), axis=-1)
-
-# rays_fine = (ray_origins[..., None, :] + ray_directions[..., None, :] * t_vals_fine_all[..., None])
-# rays_flat_fine = ops.reshape(rays_fine, [-1, 3])
-# rays_flat_encoded_fine = encode_position(rays_flat_fine, L_XYZ)
-
-# dirs_fine_shape = ops.shape(rays_fine[..., :3])
-# dirs_fine = ops.broadcast_to(ray_directions[..., None, :], dirs_fine_shape)
-# dirs_flat_fine = keras.ops.reshape(dirs_fine, [-1, 3])
-# dirs_flat_encoded_fine = encode_position(dirs_flat_fine, L_DIR)
-# print(f"Shape of rays_flat_encoded_fine: {rays_flat_encoded_fine.shape}")
-# print(f"Shape of dirs_flat_encoded_fine: {dirs_flat_encoded_fine.shape}")
+dirs_fine_shape = ops.shape(rays_fine[..., :3])
+dirs_fine = ops.broadcast_to(ray_directions[..., None, :], dirs_fine_shape)
+dirs_flat_fine = keras.ops.reshape(dirs_fine, [-1, 3])
+dirs_flat_encoded_fine = encode_position(dirs_flat_fine, L_DIR)
+print(f"Shape of rays_flat_encoded_fine: {rays_flat_encoded_fine.shape}")
+print(f"Shape of dirs_flat_encoded_fine: {dirs_flat_encoded_fine.shape}")
 
 
 

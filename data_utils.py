@@ -41,11 +41,11 @@ def get_rays(height, width, focal, pose):
         [transformed_i, -transformed_j, -ops.ones_like(i)], axis=-1
     )
     camera_matrix = pose[:3, :3]
-    height_width_focal = pose[:3, -1]
+    translations = pose[:3, -1]
     transformed_dirs = directions[..., None, :]
     camera_dirs = transformed_dirs * camera_matrix
     ray_directions = ops.sum(camera_dirs, axis=-1)
-    ray_origins = ops.broadcast_to(height_width_focal, ops.shape(ray_directions))
+    ray_origins = ops.broadcast_to(translations, ops.shape(ray_directions))
     return (ray_origins, ray_directions)
 
 def flatten_and_encode(samples, pos_encode_dims):
@@ -86,7 +86,7 @@ def render_rays(
     Returns:
         Tuple of flattened rays, direction vectors and sample points on each rays.
     """
-    t_vals = ops.linspace(near, far, num_samples)
+    t_vals = ops.linspace(near, far, num_samples, dtype="float32")
     shape = list(ray_origins.shape[:-1]) + [num_samples]
     if rand:
         noise = keras.random.uniform(shape=shape) * (far - near) / num_samples
@@ -278,7 +278,7 @@ def split_data(images, poses, split_ratio=0.8):
     val_poses = poses[split_index:]
     return train_images, val_images, train_poses, val_poses
 
-def create_tiny_dataset_pipeline(
+def create_complete_dataset_pipeline(
     images_data,
     poses_data,
     H,

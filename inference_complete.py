@@ -146,7 +146,7 @@ nerf_trainer.build(input_shape=input_shape_for_build)
 
 
 # Load the model weights if they exist
-weight_path = f"{MODEL_DIR}/tinynerf-complete-keras-best/nerf_complete_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5"
+weight_path = f"{MODEL_DIR}/tinynerf-complete-keras-20250616-best/nerf_complete_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5"
 if os.path.exists(weight_path):
     nerf_trainer.load_weights(weight_path)
     print("Model weights loaded successfully.")
@@ -154,7 +154,7 @@ else:
     print(f"Model weights not found at {weight_path}.")
 
 
-val_rgbs, val_depths, val_weights = nerf_trainer.forward_render(val_ray_origins, val_ray_directions, val_t_vals, H, W, L_XYZ, L_DIR, training=False)
+val_rgbs, val_depths, val_weights, _ = nerf_trainer.forward_render(val_ray_origins, val_ray_directions, val_t_vals, H, W, L_XYZ, L_DIR, training=False)
 
 val_rgb_coarse, val_rgb_fine = val_rgbs
 val_depth_coarse, val_depth_fine = val_depths
@@ -256,7 +256,7 @@ for index, theta in tqdm(enumerate(np.linspace(0.0, 360.0, 120, endpoint=False))
         batch_t = [t_vals]
 
         # Render the RGB and depth maps using the nerf model
-        rgbs, depth_maps, weights = nerf_trainer.forward_render(batched_ray_oris, batched_ray_dirs, batched_t, H, W, L_XYZ, L_DIR, training=False)
+        rgbs, depth_maps, weights, _ = nerf_trainer.forward_render(batched_ray_oris, batched_ray_dirs, batched_t, H, W, L_XYZ, L_DIR, training=False)
 
         # Get the RGB from the fine model
         rgb_fine = rgbs[1]

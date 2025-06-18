@@ -19,13 +19,19 @@ def create_nerf_model(num_layers, hidden_dim, num_pos, pos_encode_dims):
     outputs = layers.Dense(units=4)(x)  # RGB + density
     return keras.Model(inputs=inputs, outputs=outputs)
 
-def create_nerf_complete_model(num_layers, hidden_dim, skip_layer, lxyz, ldir):
+def create_nerf_complete_model(num_layers, hidden_dim, skip_layer, lxyz, ldir, bn=False):
     ray_input = keras.Input(shape=(None, 2 * 3 * lxyz + 3))
     dir_input = keras.Input(shape=(None, 2 * 3 * ldir + 3))
 
     x = ray_input
     for i in range(num_layers):
-        x = layers.Dense(hidden_dim, activation='relu')(x)
+        
+        if bn:
+            x = layers.Dense(hidden_dim)(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.ReLU()(x)
+        else:
+            x = layers.Dense(hidden_dim, activation="relu")(x)
 
         # Check if we have to include residual connections
         if i % skip_layer == 0 and i > 0:
@@ -39,7 +45,12 @@ def create_nerf_complete_model(num_layers, hidden_dim, skip_layer, lxyz, ldir):
 
     # Concatenate the feature vector with the direction input
     feature = layers.concatenate([feature, dir_input], axis=-1)
-    x = layers.Dense(hidden_dim//2, activation='relu')(feature)
+    if bn:
+        x = layers.Dense(hidden_dim//2)(feature)
+        x = layers.BatchNormalization()(x)
+        x = layers.ReLU()(x)
+    else:
+        x = layers.Dense(hidden_dim//2, activation="relu")(feature)
 
     # Get the rgb value
     rgb = layers.Dense(3)(x)
