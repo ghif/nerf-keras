@@ -154,7 +154,7 @@ val_image_samples = val_images_s[:nsamples]
 val_ray_ori_samples = val_ray_oris_s[:nsamples]
 val_ray_dir_samples = val_ray_dirs_s[:nsamples]
 
-t_vals = generate_t_vals(near, far, ops.shape(val_ray_ori_samples)[0], NS_COARSE, rand_sampling=True)
+t_vals = generate_t_vals(near, far, ops.shape(val_ray_ori_samples)[0], NS_COARSE, rand_sampling=False)
 
 val_rgbs, val_depths, val_weights, _ = nerf_trainer.forward_pass(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, training=False)
 
@@ -226,5 +226,5 @@ for index, theta in tqdm(enumerate(np.linspace(0.0, 360.0, 120, endpoint=False))
         batch_ray_oris.append(ray_oris)
         batch_ray_dirs.append(ray_dirs)
         
-rgb_video = "rgb_lego_video.mp4"
+rgb_video = f"{config_filename}_rgb_video.mp4"
 imageio.mimwrite(rgb_video, rgb_frames, fps=30, quality=7, macro_block_size=None)
