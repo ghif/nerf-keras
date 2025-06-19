@@ -129,7 +129,8 @@ coarse_model = create_nerf_complete_model(
     hidden_dim=HIDDEN_DIM,
     skip_layer=SKIP_LAYER,
     lxyz=L_XYZ,
-    ldir=L_DIR
+    ldir=L_DIR,
+    bn=True
 )
 
 fine_model = create_nerf_complete_model(
@@ -137,7 +138,8 @@ fine_model = create_nerf_complete_model(
     hidden_dim=HIDDEN_DIM,
     skip_layer=SKIP_LAYER,
     lxyz=L_XYZ,
-    ldir=L_DIR
+    ldir=L_DIR,
+    bn=True
 )
 
 nerf_trainer = NeRFTrainer(

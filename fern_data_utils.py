@@ -1,6 +1,8 @@
 import numpy as np
 import os, imageio
-from data_utils import get_rays
+from data_utils import get_rays, sample_rays_flat, encode_position, sample_rays
+import tensorflow as tf
+from keras import ops
 
 
 ########## Slightly modified version of LLFF data loading code 
@@ -331,6 +333,54 @@ def load_fern_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
 
     return images, poses, bds, render_poses, i_test
 
+def prepare_fern_data(target_height, target_width):
+    # Load fern dataset
+    datadir =  "data/nerf_example_data/nerf_llff_data/fern"
+    images, poses_ori, bds, render_poses, i_test = load_fern_data(datadir, factor=8, recenter=True, bd_factor=.75, spherify=False)
+
+    # Resize images
+    images_r  = tf.image.resize(images, (target_height, target_width)).numpy()
+
+    # Get focal lengths
+    _, _, focal = poses_ori[0, :3, -1]
+
+    # Get c2w matrices
+    poses = poses_ori[:, :3, :4]
+
+    # Convert poses to rays
+    rays = [get_rays(target_height, target_width, focal, pose) for pose in poses]
+    rays = ops.stack(rays, axis=0).numpy()
+    ray_oris = rays[:, 0, ...]
+    ray_dirs = rays[:, 1, ...]
+
+    # Get near-far bounds
+    near = np.min(bds) * 0.9
+    far = np.max(bds) * 1.
+
+    # Split the data into training and validation sets
+    i_test = [i_test] 
+    i_train = np.array([i for i in range(len(images)) if i not in i_test])
+
+    train_images = images_r[i_train]
+    val_images = images_r[i_test]
+
+    train_ray_oris = ray_oris[i_train]
+    val_ray_oris = ray_oris[i_test]
+
+    train_ray_dirs = ray_dirs[i_train]
+    val_ray_dirs = ray_dirs[i_test]
+
+    train_images_s = ops.reshape(train_images, [-1, train_images.shape[-1]])
+    val_images_s = ops.reshape(val_images, [-1, val_images.shape[-1]])
+
+    train_ray_oris_s = ops.reshape(train_ray_oris, [-1, train_ray_oris.shape[-1]])
+    val_ray_oris_s = ops.reshape(val_ray_oris, [-1, val_ray_oris.shape[-1]])
+
+    train_ray_dirs_s = ops.reshape(train_ray_dirs, [-1, train_ray_dirs.shape[-1]])
+    val_ray_dirs_s = ops.reshape(val_ray_dirs, [-1, val_ray_dirs.shape[-1]])
+
+    return (train_images_s, train_ray_oris_s, train_ray_dirs_s), (val_images_s, val_ray_oris_s, val_ray_dirs_s), (near, far)
+
 if __name__ == "__main__":
     # Example usage
     basedir = "data/nerf_example_data/nerf_llff_data/fern"
@@ -375,5 +425,49 @@ if __name__ == "__main__":
     print(f"Train poses shape: {train_poses.shape}")
     print(f"Validation images shape: {val_images.shape}")
     print(f"Validation poses shape: {val_poses.shape}")
+
+    target_h = int(h / 10)
+    target_w = int(w / 10)
+
+    train_images_r = tf.image.resize(train_images, [target_h, target_w])
+
+    # Batchify the pixels
+    train_images_s = ops.reshape(train_images_r, [-1, train_images_r.shape[-1]])
+
+    # Batchify the rays
+    train_rays = [get_rays(target_h, target_w, focal, pose) for pose in train_poses]
+    train_rays = ops.stack(train_rays, axis=0)
+    train_ray_oris = train_rays[:, 0, ...]
+    train_ray_dirs = train_rays[:, 1, ...]
+
+    train_ray_oris_s = ops.reshape(train_ray_oris, [-1, train_ray_oris.shape[-1]])
+    train_ray_dirs_s = ops.reshape(train_ray_dirs, [-1, train_ray_dirs.shape[-1]])
+
+    print(f"Shape of train_images_s: {train_images_s.shape}")
+    print(f"Shape of train_rays_oris_s: {train_ray_oris_s.shape}")
+    print(f"Shape of train_rays_dirs_s: {train_ray_dirs_s.shape}")
+
+    # train_img_ds = tf.data.Dataset.from_tensor_slices(train_images)
+    # train_pose_ds = tf.data.Dataset.from_tensor_slices(train_poses)
+
+    # Create t_vals
+    num_samples = 64  # Example number of samples
+    t_vals = ops.linspace(near, far, num_samples, dtype="float32")
+    print(f"Shape of t_vals: {t_vals.shape}")
+
+    # train_rays_t = train_ray_oris_s[..., None, :] + (train_ray_dirs_s[..., None, :] * t_vals[..., None])
+
+    l_xyz = 10
+    l_dir = 4
+
+    # dir_shape = ops.shape(train_rays_t[..., :3])
+    # dirs = ops.broadcast_to(train_ray_dirs_s[..., None, :], dir_shape)
+    # train_rays_enc = encode_position(train_rays_t, l_xyz)
+    # train_ray_dirs = encode_position(train, l_dir)
+    train_rays_enc, train_dirs_enc = sample_rays(train_ray_oris_s, train_ray_dirs_s, t_vals, l_xyz, l_dir)
+    
+    
+    # train_rays_flat, train_dirs_flat = sample_rays_flat(train_ray_oris_s, train_ray_dirs_s, t_vals, l_xyz, l_dir)
+    
 
 

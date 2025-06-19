@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import imageio.v2 as imageio
 
-from data_utils import split_data, create_tiny_dataset_pipeline, get_rays, render_rays
+from data_utils import split_data, create_complete_dataset_pipeline, get_rays, render_rays
 from models import create_nerf_complete_model, NeRFTrainer
 
 parser = argparse.ArgumentParser()
@@ -61,7 +61,7 @@ im_shape = images.shape
 train_images, val_images, train_poses, val_poses = split_data(images, poses, split_ratio=0.8)
 
 # Make the train dataset pipelines
-train_ds = create_tiny_dataset_pipeline(
+train_ds = create_complete_dataset_pipeline(
     train_images,
     train_poses,
     H,
@@ -79,7 +79,7 @@ train_ds = create_tiny_dataset_pipeline(
 )
 
 # Make the validation dataset pipeline
-val_ds = create_tiny_dataset_pipeline(
+val_ds = create_complete_dataset_pipeline(
     val_images,
     val_poses,
     H,

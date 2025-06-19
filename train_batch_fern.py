@@ -14,21 +14,24 @@ import matplotlib.pyplot as plt
 import json
 import argparse
 
-from data_utils import create_complete_dataset_pipeline
-from fern_data_utils import load_fern_data
-from models import create_nerf_complete_model, NeRFTrainer
+from data_utils import create_batched_dataset_pipeline, get_rays, sample_rays, encode_position, volume_render, generate_t_vals
+from fern_data_utils import prepare_fern_data
+from models import NeRFBatchTrainer, create_nerf_complete_model
 
 # tf.random.set_seed(42)
 keras.utils.set_random_seed(42)
 
 # Add argument parser
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", type=str, default="config/tiny_nerf_fern_debug.json")
+parser.add_argument("--config", type=str, default="config/fern_batch_debug.json")
 args = parser.parse_args()
 
 # Load config json
 with open(args.config) as f:
     conf = json.load(f)
+
+# Get config filename
+config_filename = os.path.splitext(os.path.basename(args.config))[0]
 
 # Initialize global variables.
 BATCH_SIZE = conf["BATCH_SIZE"]
@@ -60,81 +63,55 @@ GCS_IMAGE_DIR = f"gs://{GCS_BUCKET_NAME}/nerf/images"
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 if WITH_GCS:
-    checkpoint_dir = os.path.join(GCS_MODEL_DIR, f"tinynerf-fern-keras-{current_time}")
-    visualization_dir = os.path.join(GCS_IMAGE_DIR, f"tinynerf-fern-keras-{current_time}")
+    checkpoint_dir = os.path.join(GCS_MODEL_DIR, f"{config_filename}-{current_time}")
+    visualization_dir = os.path.join(GCS_IMAGE_DIR, f"{config_filename}-{current_time}")
 else:
-    checkpoint_dir = os.path.join(MODEL_DIR, f"tinynerf-fern-keras-{current_time}")
+    checkpoint_dir = os.path.join(MODEL_DIR, f"{config_filename}-{current_time}")
 
-# Load fern dataset
-datadir =  "data/nerf_example_data/nerf_llff_data/fern"
-images, poses_ori, bds, render_poses, i_test = load_fern_data(datadir, factor=8, recenter=True, bd_factor=.75, spherify=False)
+# Load Fern dataset
+(train_data, val_data, bounds) = prepare_fern_data(H, W)
+(train_images_s, train_ray_oris_s, train_ray_dirs_s) = train_data
+(val_images_s, val_ray_oris_s, val_ray_dirs_s) = val_data
+(near, far) = bounds
 
-# Get focal lengths
-_, _, focal = poses_ori[0, :3, -1]
-
-# Get c2w matrices
-poses = poses_ori[:, :3, :4]
-
-# Get near-far bounds
-near = np.min(bds) * 0.9
-far = np.max(bds) * 1.
-
-# Split the data into training and validation sets
-i_test = [i_test] 
-i_train = np.array([i for i in range(len(images)) if i not in i_test])
-
-train_images = images[i_train]
-val_images = images[i_test]
-train_poses = poses[i_train]
-val_poses = poses[i_test]
-
-# Make the train dataset pipelines
-train_ds = create_complete_dataset_pipeline(
-    train_images,
-    train_poses,
-    H,
-    W,
-    focal,
+train_ds = create_batched_dataset_pipeline(
+    train_images_s, 
+    train_ray_oris_s, 
+    train_ray_dirs_s,
     NS_COARSE,
-    L_XYZ,
-    L_DIR,
-    BATCH_SIZE,
-    AUTO,
-    near=near,
+    BATCH_SIZE, 
+    AUTO, 
+    near=near, 
     far=far,
     shuffle=True,
     rand_sampling=True,
 )
 
-# Make the validation dataset pipeline
-val_ds = create_complete_dataset_pipeline(
-    val_images,
-    val_poses,
-    H,
-    W,
-    focal,
+val_ds = create_batched_dataset_pipeline(
+    val_images_s,
+    val_ray_oris_s,
+    val_ray_dirs_s,
     NS_COARSE,
-    L_XYZ,
-    L_DIR,
-    1,
+    BATCH_SIZE,
     AUTO,
     near=near,
     far=far,
-    shuffle=False, # Typically, validation data is not shuffled
-    rand_sampling=False, # Or True, depending on if you want stochasticity here
+    shuffle=False,
+    rand_sampling=True,
 )
-
-train_imgs, train_rays = next(iter(train_ds))
-train_ray_origins, train_ray_directions, train_rays_flat, train_dirs_flat, train_t_vals = train_rays
+train_imgs, train_rays =  next(iter(train_ds))
+train_ray_origins, train_ray_directions, train_t_vals = train_rays
 
 val_imgs, val_rays = next(iter(val_ds))
-val_ray_origins, val_ray_directions, val_rays_flat, val_dirs_flat, val_t_vals = val_rays
+val_ray_origins, val_ray_directions, val_t_vals = val_rays
 
 # Create coarse and fine NeRF models
+# coarse_model = create_nerf_batch_model(
 coarse_model = create_nerf_complete_model(
     num_layers=NUM_LAYERS,
     hidden_dim=HIDDEN_DIM,
     skip_layer=SKIP_LAYER,
+    # num_samples=NS_COARSE,
     lxyz=L_XYZ,
     ldir=L_DIR,
     bn=BATCH_NORM
@@ -143,10 +120,12 @@ coarse_model = create_nerf_complete_model(
 print(f"Coarse Model Summary:")
 print(coarse_model.summary(expand_nested=True))
 
+# fine_model = create_nerf_batch_model(
 fine_model = create_nerf_complete_model(
     num_layers=NUM_LAYERS,
     hidden_dim=HIDDEN_DIM,
     skip_layer=SKIP_LAYER,
+    # num_samples=NS_FINE,
     lxyz=L_XYZ,
     ldir=L_DIR,
     bn=BATCH_NORM
@@ -155,12 +134,14 @@ fine_model = create_nerf_complete_model(
 print(f"Fine Model Summary:")
 print(fine_model.summary(expand_nested=True))
 
-nerf_trainer = NeRFTrainer(
+nerf_trainer = NeRFBatchTrainer(
     coarse_model=coarse_model,
     fine_model=fine_model,
     batch_size=BATCH_SIZE,
     ns_coarse=NS_COARSE,
-    ns_fine=NS_FINE
+    ns_fine=NS_FINE,
+    l_xyz=L_XYZ,
+    l_dir=L_DIR,
 )
 
 optimizer = keras.optimizers.Adam(
@@ -196,11 +177,18 @@ class TrainCallback(keras.callbacks.Callback):
         history["losses_coarse"] = loss_coarse_list
         history["losses"] = loss_list
         history["psnrs"] = psnr_list
+        
+        t_vals = generate_t_vals(near, far, ops.shape(val_ray_oris_s)[0], NS_COARSE, rand_sampling=True)
+        rgbs, depths, _, _ = self.model.forward_pass(val_ray_oris_s, val_ray_dirs_s, t_vals, L_XYZ, L_DIR, training=False)
 
-        rgbs, depths, _, _ = self.model.forward_render(val_ray_origins, val_ray_directions, val_t_vals, H, W, L_XYZ, L_DIR, training=False)
 
         (_, test_recons_images) = rgbs
         (_, depth_maps) = depths
+
+        # Reshape the test_recons_images and depth_maps to (nb, H, W, 3) and (nb, H, W) respectively.
+        nb = int(ops.shape(test_recons_images)[0] / (H * W))
+        test_recons_images = ops.reshape(test_recons_images, (nb, H, W, 3))
+        depth_maps = ops.reshape(depth_maps, (nb, H, W))
         
         # Save weights of self.model.nerf_model
         if WITH_GCS:
@@ -277,10 +265,8 @@ class TrainCallback(keras.callbacks.Callback):
 images_shape = train_imgs.shape[1:]
 ray_origins_shape = train_ray_origins.shape[1:]
 ray_directions_shape = train_ray_directions.shape[1:]
-rays_flat_shape = train_rays_flat.shape[1:]
-dirs_flat_shape = train_dirs_flat.shape[1:]
 t_vals_shape = train_t_vals.shape[1:]
-rays_tuple_shape = (ray_origins_shape, ray_directions_shape, rays_flat_shape, dirs_flat_shape, t_vals_shape)
+rays_tuple_shape = (ray_origins_shape, ray_directions_shape, t_vals_shape)
 input_shape_for_build = (images_shape, rays_tuple_shape)
 nerf_trainer.build(input_shape=input_shape_for_build)
 
@@ -290,3 +276,18 @@ nerf_trainer.fit(
     epochs=EPOCHS,
     callbacks=[TrainCallback()],
 )
+
+# val_rays, val_dirs = sample_rays(val_ray_origins, val_ray_directions, val_t_vals)
+# print(f"Shape of val_rays: {val_rays.shape}")
+# print(f"Shape of val_dirs: {val_dirs.shape}")
+
+# val_rays_enc = encode_position(val_rays, pos_encode_dims=L_XYZ)
+# val_dirs_enc = encode_position(val_dirs, pos_encode_dims=L_DIR)
+
+# # Test prediciton
+# pred_coarse = nerf_trainer.coarse_model([val_rays_enc, val_dirs_enc], training=False)
+# rgbs, depths, weights = volume_render(pred_coarse, val_t_vals)
+
+# print(f"Shape of rgbs: {rgbs.shape}")
+# print(f"Shape of depths: {depths.shape}")
+# print(f"Shape of weights: {weights.shape}")
