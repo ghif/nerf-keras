@@ -181,8 +181,12 @@ class TrainCallback(keras.callbacks.Callback):
         history["psnrs"] = psnr_list
 
         # Predict with volume rendering
-        t_vals = generate_t_vals(near, far, ops.shape(val_ray_oris_s)[0], NS_COARSE, rand_sampling=True)
-        rgbs, depths, _, _ = self.model.forward_pass(val_ray_oris_s, val_ray_dirs_s, t_vals, L_XYZ, L_DIR, training=False)
+        nsample = 2 * H * W
+        val_ray_ori_samples = val_ray_oris_s[:nsample]
+        val_ray_dir_samples = val_ray_dirs_s[:nsample]
+
+        t_vals = generate_t_vals(near, far, ops.shape(val_ray_ori_samples)[0], NS_COARSE, rand_sampling=True)
+        rgbs, depths, _, _ = self.model.forward_pass(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, training=False)
 
         (_, test_recons_images) = rgbs
         (_, depth_maps) = depths

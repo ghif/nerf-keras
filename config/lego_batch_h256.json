@@ -1,5 +1,5 @@
 {
-    "BATCH_SIZE": 512,
+    "BATCH_SIZE": 1024,
     "NS_COARSE": 64,
     "NS_FINE": 128,
     "HEIGHT": 50,
