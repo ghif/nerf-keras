@@ -226,7 +226,6 @@ batch_ray_oris = []
 batch_ray_dirs = []
 batch_t = []
 
-
 # Iterate over different theta value and generate scenes.
 for index, theta in tqdm(enumerate(np.linspace(0.0, 360.0, 120, endpoint=False))):
     # Get the camera to world matrix.

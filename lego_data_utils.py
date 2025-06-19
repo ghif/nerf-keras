@@ -48,6 +48,6 @@ def prepare_lego_data(target_height, target_width):
     near = 2.0
     far = 6.0
 
-    return (train_images_s, train_ray_oris_s, train_ray_dirs_s), (val_images_s, val_ray_oris_s, val_ray_dirs_s), (near, far)
+    return (train_images_s, train_ray_oris_s, train_ray_dirs_s), (val_images_s, val_ray_oris_s, val_ray_dirs_s), (near, far), focal
     
 
