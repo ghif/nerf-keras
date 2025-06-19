@@ -25,52 +25,6 @@ def create_nerf_complete_model(num_layers, hidden_dim, skip_layer, lxyz, ldir, b
 
     x = ray_input
     for i in range(num_layers):
-        
-        if bn:
-            x = layers.Dense(hidden_dim)(x)
-            x = layers.BatchNormalization()(x)
-            x = layers.ReLU()(x)
-        else:
-            x = layers.Dense(hidden_dim, activation="relu")(x)
-
-        # Check if we have to include residual connections
-        if i % skip_layer == 0 and i > 0:
-            x = layers.concatenate([x, ray_input], axis=-1)
-        
-    # Get the sigma value
-    sigma = layers.Dense(1)(x)
-
-    # Create a feature vector
-    feature = layers.Dense(hidden_dim)(x)
-
-    # Concatenate the feature vector with the direction input
-    feature = layers.concatenate([feature, dir_input], axis=-1)
-    if bn:
-        x = layers.Dense(hidden_dim//2)(feature)
-        x = layers.BatchNormalization()(x)
-        x = layers.ReLU()(x)
-    else:
-        x = layers.Dense(hidden_dim//2, activation="relu")(feature)
-
-    # Get the rgb value
-    rgb = layers.Dense(3)(x)
-
-    outputs = layers.concatenate([rgb, sigma], axis=-1)
-
-    nerf_model = keras.Model(inputs=[ray_input, dir_input], outputs=outputs)
-    return nerf_model
-
-def create_nerf_batch_model(num_layers, hidden_dim, skip_layer, num_samples, lxyz, ldir, bn=False):
-
-    enc_dim_ray = 2 * 3 * lxyz + 3
-    ray_input = keras.Input(shape=(num_samples * enc_dim_ray,))
-
-    enc_dim_dir = 2 * 3 * ldir + 3
-    dir_input = keras.Input(shape=(num_samples * enc_dim_dir,))
-
-    x = ray_input
-    for i in range(num_layers):
-        
         if bn:
             x = layers.Dense(hidden_dim)(x)
             x = layers.BatchNormalization()(x)

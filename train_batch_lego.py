@@ -15,7 +15,7 @@ import json
 import argparse
 
 from data_utils import create_batched_dataset_pipeline, generate_t_vals
-from fern_data_utils import prepare_fern_data
+from lego_data_utils import prepare_lego_data
 from models import NeRFBatchTrainer, create_nerf_complete_model
 
 # tf.random.set_seed(42)
@@ -23,7 +23,7 @@ keras.utils.set_random_seed(42)
 
 # Add argument parser
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", type=str, default="config/fern_batch_debug.json")
+parser.add_argument("--config", type=str, default="config/lego_batch_debug.json")
 args = parser.parse_args()
 
 # Load config json
@@ -68,8 +68,8 @@ if WITH_GCS:
 else:
     checkpoint_dir = os.path.join(MODEL_DIR, f"{config_filename}-{current_time}")
 
-# Load Fern dataset
-(train_data, val_data, bounds) = prepare_fern_data(H, W)
+# Load Lego dataset
+(train_data, val_data, bounds) = prepare_lego_data(H, W)
 (train_images_s, train_ray_oris_s, train_ray_dirs_s) = train_data
 (val_images_s, val_ray_oris_s, val_ray_dirs_s) = val_data
 (near, far) = bounds
@@ -77,8 +77,6 @@ else:
 # # Plot a random image
 # nb = int(ops.shape(train_images_s)[0] / (H * W))
 # train_imgs = ops.reshape(train_images_s, (nb, H, W, 3))
-
-
 # plt.imshow(train_imgs[np.random.randint(0, nb)])
 # plt.show()
 
