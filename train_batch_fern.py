@@ -199,18 +199,19 @@ class TrainCallback(keras.callbacks.Callback):
         depth_maps = ops.reshape(depth_maps, (nb, H, W))
         
         # Save weights of self.model.nerf_model
+        weight_file_prefix = f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}"
         if WITH_GCS:
             if not tf.io.gfile.exists(checkpoint_dir):
                 tf.io.gfile.makedirs(checkpoint_dir)
 
             print(f"Created GCS directory: {checkpoint_dir}")
-            weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_fern_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
+            weight_path = tf.io.gfile.join(checkpoint_dir, f"{weight_file_prefix}.weights.h5")
         else:
             if not os.path.exists(checkpoint_dir):
                 os.makedirs(checkpoint_dir)
 
             print(f"Created Local directory: {checkpoint_dir}")
-            weight_path = os.path.join(checkpoint_dir, f"nerf_fern_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
+            weight_path = os.path.join(checkpoint_dir, f"{weight_file_prefix}.weights.h5")
 
         self.model.save_weights(weight_path)
 

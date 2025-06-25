@@ -205,6 +205,7 @@ class NeRFBatchTrainer(keras.Model):
         dirs_enc = encode_position(dirs, pos_encode_dims=l_dir)
 
         predictions_coarse = self.coarse_model([rays_enc, dirs_enc], training=training)
+        # predictions_coarse = self.coarse_model.predict([rays_enc, dirs_enc], batch_size=128)
         rgb_coarse, depth_coarse, weights_coarse = volume_render(predictions_coarse, t_vals)
         t_vals_coarse_mid = (0.5 * (t_vals[..., 1:] + t_vals[..., :-1]))
         t_vals_fine = sample_pdf(t_vals_coarse_mid, weights_coarse, self.ns_fine)
@@ -215,6 +216,7 @@ class NeRFBatchTrainer(keras.Model):
         dirs_fine_enc = encode_position(dirs_fine, pos_encode_dims=l_dir)
 
         predictions_fine = self.fine_model([rays_fine_enc, dirs_fine_enc], training=training)
+        # predictions_fine = self.fine_model.predict([rays_fine_enc, dirs_fine_enc], batch_size=128)
         rgb_fine, depth_fine, weights_fine = volume_render(predictions_fine, t_vals_fine_all)
         return (rgb_coarse, rgb_fine), (depth_coarse, depth_fine), (weights_coarse, weights_fine), (predictions_coarse, predictions_fine)
 

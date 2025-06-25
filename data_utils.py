@@ -32,15 +32,16 @@ def get_rays(height, width, focal, pose):
     Returns:
         Tuple of origin point and direction vector for rays.
     """
-    i, j = ops.meshgrid(
+    # Get the pixel coordinates
+    u, v = ops.meshgrid(
         ops.arange(width, dtype="float32"),
         ops.arange(height, dtype="float32"),
         indexing="xy",
     )
-    transformed_i = (i - width * 0.5) / focal
-    transformed_j = (j - height * 0.5) / focal
+    transformed_u = (u - width * 0.5) / focal
+    transformed_v = (v - height * 0.5) / focal
     directions = ops.stack(
-        [transformed_i, -transformed_j, -ops.ones_like(i)], axis=-1
+        [transformed_u, -transformed_v, -ops.ones_like(u)], axis=-1
     )
     camera_matrix = pose[:3, :3]
     translations = pose[:3, -1]
@@ -377,13 +378,6 @@ def create_batched_dataset_pipeline(
 
     # Ray dataset
     t_vals = generate_t_vals(near, far, ops.shape(ray_oris_s)[0], num_samples, rand_sampling)
-    # t_vals = ops.linspace(near, far, num_samples, dtype="float32")
-    # if rand_sampling:
-    #     noise = keras.random.uniform(shape=ops.shape(t_vals)) * (far - near) / num_samples
-    #     t_vals = t_vals + noise
-    
-    # t_vals = ops.broadcast_to(t_vals, ops.shape(ray_oris_s)[:-1] + (num_samples, ))
-
     ray_ds = tf.data.Dataset.from_tensor_slices((ray_oris_s, ray_dirs_s, t_vals))
 
     dataset = tf.data.Dataset.zip((img_ds, ray_ds))
