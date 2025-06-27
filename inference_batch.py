@@ -26,8 +26,8 @@ keras.utils.set_random_seed(42)
 
 # Add argument parser
 parser = argparse.ArgumentParser()
-# parser.add_argument("--config", type=str, default="config/lego_batch_h256.json")
-parser.add_argument("--config", type=str, default="config/fern_batch_h256.json")
+parser.add_argument("--config", type=str, default="config/lego_batch_h256.json")
+# parser.add_argument("--config", type=str, default="config/fern_batch_h256.json")
 args = parser.parse_args()
 
 # Load config json
@@ -61,8 +61,8 @@ if not os.path.exists(MODEL_DIR):
 
 
 # Load Lego dataset
-# (train_data, val_data, bounds, focal) = prepare_lego_data(H, W)
-(train_data, val_data, bounds) = prepare_fern_data(H, W)
+(train_data, val_data, bounds, focal) = prepare_lego_data(H, W)
+# (train_data, val_data, bounds) = prepare_fern_data(H, W)
 (train_images_s, train_ray_oris_s, train_ray_dirs_s) = train_data
 (val_images_s, val_ray_oris_s, val_ray_dirs_s) = val_data
 (near, far) = bounds
@@ -151,11 +151,12 @@ else:
     print(f"Model weights not found at {weight_path}.")
 
 # Get first 5 samples from the validation dataset
-nsamples = 1 * H * W
+n_images = 3
+n_samples = n_images * H * W
 
-val_image_samples = val_images_s[:nsamples]
-val_ray_ori_samples = val_ray_oris_s[:nsamples]
-val_ray_dir_samples = val_ray_dirs_s[:nsamples]
+val_image_samples = val_images_s[:n_samples]
+val_ray_ori_samples = val_ray_oris_s[:n_samples]
+val_ray_dir_samples = val_ray_dirs_s[:n_samples]
 
 t_vals = generate_t_vals(near, far, ops.shape(val_ray_ori_samples)[0], NS_COARSE, rand_sampling=False)
 
@@ -172,62 +173,71 @@ recons_imgs = ops.reshape(val_rgb_fine, (nb, H, W, 3))
 depth_maps = ops.reshape(val_depth_fine, (nb, H, W))
 
 # Create subplots
-fig, axes = plt.subplots(nrows=5, ncols=3, figsize=(10, 20))
+fig, axes = plt.subplots(nrows=n_images, ncols=3, figsize=(10, 20))
 
+counter = 0
 for ax, ori_img, recons_img, depth_map in zip(
     axes, ori_imgs, recons_imgs, depth_maps
 ):
     ax[0].imshow(keras.utils.array_to_img(ori_img))
-    ax[0].set_title("Original Image")
+    if counter == 0:
+        ax[0].set_title("Original Image")
+    ax[0].axis("off")
 
     ax[1].imshow(keras.utils.array_to_img(recons_img))
-    ax[1].set_title("Reconstructed Image")
+    if counter == 0:
+        ax[1].set_title("Reconstructed Image")
+    ax[1].axis("off")
 
-    ax[2].imshow(keras.utils.array_to_img(depth_map[..., None]), cmap="inferno")
-    ax[2].set_title("Depth Map")
+    # ax[2].imshow(keras.utils.array_to_img(depth_map[..., None]), cmap="inferno")
+    ax[2].imshow(keras.utils.array_to_img(depth_map[..., None]))
+    if counter == 0:
+        ax[2].set_title("Depth Map")
+    ax[2].axis("off")
 
+    counter += 1
 plt.show()
 
-# rgb_frames = []
-# batch_ray_oris = []
-# batch_ray_dirs = []
+rgb_frames = []
+batch_ray_oris = []
+batch_ray_dirs = []
 
-# # Iterate over different theta value and generate scenes.
-# for index, theta in tqdm(enumerate(np.linspace(0.0, 360.0, 120, endpoint=False))):
-#     # Get the camera to world matrix.
-#     c2w = pose_spherical(theta, -30.0, 4.0)
+# Iterate over different theta value and generate scenes.
+for index, theta in tqdm(enumerate(np.linspace(0.0, 360.0, 120, endpoint=False))):
+    # Get the camera to world matrix.
+    c2w = pose_spherical(theta, -30.0, 4.0)
 
-#     ray_oris, ray_dirs = get_rays(H, W, focal, c2w)
-#     # print(f"Shape of ray_oris: {ray_oris.shape}, ray_dirs: {ray_dirs.shape}")
+    ray_oris, ray_dirs = get_rays(H, W, focal, c2w)
+    # print(f"Shape of ray_oris: {ray_oris.shape}, ray_dirs: {ray_dirs.shape}")
 
-#     if index % 5 == 0 and index > 0:
-#         batched_ray_oris = ops.stack(batch_ray_oris, axis=0)
-#         batch_ray_oris = [ray_oris]
+    if index % 5 == 0 and index > 0:
+        batched_ray_oris = ops.stack(batch_ray_oris, axis=0)
+        batch_ray_oris = [ray_oris]
         
-#         batched_ray_dirs = ops.stack(batch_ray_dirs, axis=0)
-#         batch_ray_dirs = [ray_dirs]
+        batched_ray_dirs = ops.stack(batch_ray_dirs, axis=0)
+        batch_ray_dirs = [ray_dirs]
 
-#         # Render the RGB and depth maps using the nerf model
-#         ray_ori_s = ops.reshape(batched_ray_oris, (-1, batched_ray_oris.shape[-1]))
-#         ray_dir_s = ops.reshape(batched_ray_dirs, (-1, batched_ray_dirs.shape[-1]))
-#         t_vals_s = generate_t_vals(near, far, ops.shape(ray_ori_s)[0], NS_COARSE, rand_sampling=True)
+        # Render the RGB and depth maps using the nerf model
+        ray_ori_s = ops.reshape(batched_ray_oris, (-1, batched_ray_oris.shape[-1]))
+        ray_dir_s = ops.reshape(batched_ray_dirs, (-1, batched_ray_dirs.shape[-1]))
+        t_vals_s = generate_t_vals(near, far, ops.shape(ray_ori_s)[0], NS_COARSE, rand_sampling=False)
 
-#         rgbs, depth_maps, weights, _ = nerf_trainer.forward_pass(ray_ori_s, ray_dir_s, t_vals_s, L_XYZ, L_DIR, training=False)
+        rgbs, depth_maps, weights, _ = nerf_trainer.forward_pass(ray_ori_s, ray_dir_s, t_vals_s, L_XYZ, L_DIR, training=False)
 
-#         # Get the RGB from the fine model
-#         rgb_fine = rgbs[1]
+        # Get the RGB from the fine model
+        rgb_fine = rgbs[1]
 
-#         # Reshape rgb_fine to (nb, H, W, 3)
-#         nb = int(ops.shape(rgb_fine)[0] / (H * W))
-#         rgb_fine = ops.reshape(rgb_fine, (nb, H, W, 3))
+        # Reshape rgb_fine to (nb, H, W, 3)
+        nb = int(ops.shape(rgb_fine)[0] / (H * W))
+        rgb_fine = ops.reshape(rgb_fine, (nb, H, W, 3))
         
-#         # Get the RGB frames from the rendered images
-#         temp_rgb = [np.clip(255 * img, 0.0, 255.0).astype(np.uint8) for img in rgb_fine]
-#         rgb_frames += temp_rgb
-#     else:
-#         # batch_flat.append(rays_flat)
-#         batch_ray_oris.append(ray_oris)
-#         batch_ray_dirs.append(ray_dirs)
+        # Get the RGB frames from the rendered images
+        temp_rgb = [np.clip(255 * img, 0.0, 255.0).astype(np.uint8) for img in rgb_fine]
+        rgb_frames += temp_rgb
+    else:
+        # batch_flat.append(rays_flat)
+        batch_ray_oris.append(ray_oris)
+        batch_ray_dirs.append(ray_dirs)
         
-# rgb_video = f"{config_filename}_rgb_video.mp4"
-# imageio.mimwrite(rgb_video, rgb_frames, fps=30, quality=7, macro_block_size=None)
+rgb_video = f"{config_filename}_rgb_video_v2.mp4"
+imageio.mimwrite(rgb_video, rgb_frames, fps=30, quality=9, macro_block_size=None)

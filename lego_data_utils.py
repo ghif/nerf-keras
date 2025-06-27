@@ -51,3 +51,10 @@ def prepare_lego_data(target_height, target_width):
     return (train_images_s, train_ray_oris_s, train_ray_dirs_s), (val_images_s, val_ray_oris_s, val_ray_dirs_s), (near, far), focal
     
 
+if __name__ == "__main__":
+    # Example usage
+    (train_data, val_data, bounds, focal) = prepare_lego_data(100, 100)
+    print("Train data shapes:", [d.shape for d in train_data])
+    print("Validation data shapes:", [d.shape for d in val_data])
+    print("Bounds:", bounds)
+    print("Focal length:", focal)
