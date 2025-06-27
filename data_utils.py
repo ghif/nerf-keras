@@ -544,20 +544,24 @@ def sample_pdf(t_vals_mid, weights, ns_fine):
     # sorted manner
     indices = tf.searchsorted(cdf, u, side="right")
 
-    tf.print("\n[sample_pdf] indices: #",ops.shape(indices),"# (min: ",ops.min(indices),", max: ",ops.max(indices),")", indices[0, :4])
+    # tf.print("\n[sample_pdf] indices: #",ops.shape(indices),"# (min: ",ops.min(indices),", max: ",ops.max(indices),")", indices[0, :4])
+
+    print(f"\n[sample_pdf] indices {ops.shape(indices)}: # (min: {ops.min(indices)}, max: {ops.max(indices)}) #")
 
     # define the boundaries
     below = tf.maximum(0, indices-1)
     above = tf.minimum(cdf.shape[-1]-1, indices)
     indices_g = tf.stack([below, above], axis=-1)
-    tf.print("\n[sample_pdf] indices_g: #",ops.shape(indices_g),"# (min: ",ops.min(indices_g),", max: ",ops.max(indices_g),")", indices_g[0, :4])
+    # tf.print("\n[sample_pdf] indices_g: #",ops.shape(indices_g),"# (min: ",ops.min(indices_g),", max: ",ops.max(indices_g),")", indices_g[0, :4])
+    print(f"\n[sample_pdf] indices_g {ops.shape(indices_g)}: # (min: {ops.min(indices_g)}, max: {ops.max(indices_g)}) #")
     
     # gather the cdf according to the indices
     cdf_g = tf.gather(cdf, indices_g, axis=-1, batch_dims=len(indices_g.shape)-2)
     # tf.print("\n[sample_pdf] cdf_g: #",ops.shape(cdf_g),"#", cdf_g[0, :4])
 
     # gather the tVals according to the indices
-    tf.print("\n[sample_pdf] t_vals_mid: #",ops.shape(t_vals_mid),"#", t_vals_mid[0, :4])
+    # tf.print("\n[sample_pdf] t_vals_mid: #",ops.shape(t_vals_mid),"#", t_vals_mid[0, :4])
+    print(f"\n[sample_pdf] t_vals_mid shape: {ops.shape(t_vals_mid)}")
     
     t_vals_mid_g = tf.gather(t_vals_mid, indices_g, axis=-1,
         batch_dims=len(indices_g.shape)-2)
