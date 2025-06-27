@@ -548,8 +548,12 @@ def sample_pdf(t_vals_mid, weights, ns_fine):
         batch_dims=len(indices_g.shape)-2)
 
     # gather the tVals according to the indices
+    print(f"[sample_pdf] t_vals_mid shape: {ops.shape(t_vals_mid)}")
+    print(f"[sample_pdf] indices_g shape: {ops.shape(indices_g)}")
     t_vals_mid_g = tf.gather(t_vals_mid, indices_g, axis=-1,
         batch_dims=len(indices_g.shape)-2)
+    
+    print(f"[sample_pdf] t_vals_mid_g shape: {ops.shape(t_vals_mid_g)}")
     # create the samples by inverting the cdf
     denom = cdf_g[..., 1] - cdf_g[..., 0]
     denom = tf.where(denom < 1e-5, tf.ones_like(denom), denom)
