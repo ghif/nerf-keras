@@ -23,7 +23,7 @@ keras.utils.set_random_seed(42)
 
 # Add argument parser
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", type=str, default="config/lego_batch_debug.json")
+parser.add_argument("--config", type=str, default="config/lego_batch_h256_tpu.json")
 args = parser.parse_args()
 
 # Load config json
