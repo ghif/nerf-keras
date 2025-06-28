@@ -529,9 +529,9 @@ def sample_pdf(t_vals_mid, weights, ns_fine):
     # from pdf to cdf transformation
     cdf = tf.cumsum(pdf, axis=-1)
     # tf.print("\n[sample_pdf] cdf: #",ops.shape(cdf),"#", cdf[0, :4])
-    # start the cdf with 0s
+    # start the cdf with 0sa
     cdf = tf.concat([tf.zeros_like(cdf[..., :1]), cdf], axis=-1)
-    # tf.print("\n[sample_pdf] cdf after concat: #",ops.shape(cdf),"# ", cdf[0, :4])
+    print(f"\n[sample_pdf] cdf shape: {ops.shape(cdf)}")
     # get the sample points
     if len(ops.shape(weights)) == 4:
         u_shape = [batch_size, image_height, image_width, ns_fine]
@@ -550,21 +550,23 @@ def sample_pdf(t_vals_mid, weights, ns_fine):
 
     # define the boundaries
     below = tf.maximum(0, indices-1)
-    above = tf.minimum(cdf.shape[-1]-2, indices)
+    above = tf.minimum(cdf.shape[-1]-1, indices)
     indices_g = tf.stack([below, above], axis=-1)
-    print(f"\n[sample_pdf] cdf.shape[-1]-1 : {cdf.shape[-1]-1}")
+    print(f"\n[sample_pdf] cdf.shape[-1]-3 : {cdf.shape[-1]-3}")
     # tf.print("\n[sample_pdf] indices_g: #",ops.shape(indices_g),"# (min: ",ops.min(indices_g),", max: ",ops.max(indices_g),")", indices_g[0, :4])
     print(f"\n[sample_pdf] indices_g {ops.shape(indices_g)}: # (min: {ops.min(indices_g)}, max: {ops.max(indices_g)}) #")
     
     # gather the cdf according to the indices
     cdf_g = tf.gather(cdf, indices_g, axis=-1, batch_dims=len(indices_g.shape)-2)
     # tf.print("\n[sample_pdf] cdf_g: #",ops.shape(cdf_g),"#", cdf_g[0, :4])
+    print(f"\n[sample_pdf] cdf_g shape: {ops.shape(cdf_g)}")
 
     # gather the tVals according to the indices
     # tf.print("\n[sample_pdf] t_vals_mid: #",ops.shape(t_vals_mid),"#", t_vals_mid[0, :4])
     print(f"\n[sample_pdf] t_vals_mid shape: {ops.shape(t_vals_mid)}")
-    
-    t_vals_mid_g = tf.gather(t_vals_mid, indices_g, axis=-1,
+    indices_gt = tf.minimum(t_vals_mid.shape[-1] - 1, indices_g)
+    print(f"\n[sample_pdf] indices_gt {ops.shape(indices_gt)}: # (min: {ops.min(indices_gt)}, max: {ops.max(indices_gt)}) #")
+    t_vals_mid_g = tf.gather(t_vals_mid, indices_gt, axis=-1,
         batch_dims=len(indices_g.shape)-2)
     
     # tf.print("\n[sample_pdf] t_vals_mid_g: #",ops.shape(t_vals_mid_g),"# ", t_vals_mid_g[0, :4])
