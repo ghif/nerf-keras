@@ -1,12 +1,8 @@
 import numpy as np
 import os, imageio
-from data_utils import get_rays, sample_rays_flat, encode_position, sample_rays
+from data_utils import get_rays, sample_rays
 import tensorflow as tf
 from keras import ops
-
-
-########## Slightly modified version of LLFF data loading code 
-##########  see https://github.com/Fyusion/LLFF for original
 
 def _minify(basedir, factors=[], resolutions=[]):
     needtoload = False

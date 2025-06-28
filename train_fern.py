@@ -16,14 +16,14 @@ import argparse
 
 from data_utils import create_batched_dataset_pipeline, generate_t_vals
 from fern_data_utils import prepare_fern_data
-from models import NeRFBatchTrainer, create_nerf_complete_model
+from models import NeRFTrainer, create_nerf_complete_model
 
 # tf.random.set_seed(42)
 keras.utils.set_random_seed(42)
 
 # Add argument parser
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", type=str, default="config/fern_batch_h256_tpu.json")
+parser.add_argument("--config", type=str, default="config/fern_batch_debug.json")
 args = parser.parse_args()
 
 # Load config json
@@ -67,18 +67,6 @@ if WITH_GCS:
     visualization_dir = os.path.join(GCS_IMAGE_DIR, f"{config_filename}-{current_time}")
 else:
     checkpoint_dir = os.path.join(MODEL_DIR, f"{config_filename}-{current_time}")
-
-# Setup TPU configuration
-try:
-    resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu="local")
-
-    tf.config.experimental_connect_to_cluster(resolver)
-    tf.tpu.experimental.initialize_tpu_system(resolver)
-    strategy = tf.distribute.TPUStrategy(resolver)
-    print("Successfully initialized TPU.")
-    print("All devices: ", tf.config.list_logical_devices('TPU'))
-except Exception as e:
-    print(f"Failed to initialize TPU: {e}")
 
 # Load Fern dataset
 (train_data, val_data, bounds) = prepare_fern_data(H, W)
@@ -125,49 +113,48 @@ train_ray_origins, train_ray_directions, train_t_vals = train_rays
 val_imgs, val_rays = next(iter(val_ds))
 val_ray_origins, val_ray_directions, val_t_vals = val_rays
 
-with strategy.scope():
-    # Create coarse and fine NeRF models
-    coarse_model = create_nerf_complete_model(
-        num_layers=NUM_LAYERS,
-        hidden_dim=HIDDEN_DIM,
-        skip_layer=SKIP_LAYER,
-        lxyz=L_XYZ,
-        ldir=L_DIR,
-        bn=BATCH_NORM
-    )
+# Create coarse and fine NeRF models
+coarse_model = create_nerf_complete_model(
+    num_layers=NUM_LAYERS,
+    hidden_dim=HIDDEN_DIM,
+    skip_layer=SKIP_LAYER,
+    lxyz=L_XYZ,
+    ldir=L_DIR,
+    bn=BATCH_NORM
+)
 
-    print(f"Coarse Model Summary:")
-    print(coarse_model.summary(expand_nested=True))
+print(f"Coarse Model Summary:")
+print(coarse_model.summary(expand_nested=True))
 
-    fine_model = create_nerf_complete_model(
-        num_layers=NUM_LAYERS,
-        hidden_dim=HIDDEN_DIM,
-        skip_layer=SKIP_LAYER,
-        lxyz=L_XYZ,
-        ldir=L_DIR,
-        bn=BATCH_NORM
-    )
+fine_model = create_nerf_complete_model(
+    num_layers=NUM_LAYERS,
+    hidden_dim=HIDDEN_DIM,
+    skip_layer=SKIP_LAYER,
+    lxyz=L_XYZ,
+    ldir=L_DIR,
+    bn=BATCH_NORM
+)
 
-    print(f"Fine Model Summary:")
-    print(fine_model.summary(expand_nested=True))
+print(f"Fine Model Summary:")
+print(fine_model.summary(expand_nested=True))
 
-    nerf_trainer = NeRFBatchTrainer(
-        coarse_model=coarse_model,
-        fine_model=fine_model,
-        batch_size=BATCH_SIZE,
-        ns_coarse=NS_COARSE,
-        ns_fine=NS_FINE,
-        l_xyz=L_XYZ,
-        l_dir=L_DIR,
-    )
+nerf_trainer = NeRFTrainer(
+    coarse_model=coarse_model,
+    fine_model=fine_model,
+    batch_size=BATCH_SIZE,
+    ns_coarse=NS_COARSE,
+    ns_fine=NS_FINE,
+    l_xyz=L_XYZ,
+    l_dir=L_DIR,
+)
 
-    optimizer = keras.optimizers.Adam(
-        learning_rate=LEARNING_RATE
-    )
-    nerf_trainer.compile(
-        optimizer=optimizer,
-        loss_fn=keras.losses.MeanSquaredError(),
-    )
+optimizer = keras.optimizers.Adam(
+    learning_rate=LEARNING_RATE
+)
+nerf_trainer.compile(
+    optimizer=optimizer,
+    loss_fn=keras.losses.MeanSquaredError(),
+)
 
 # Create a directory to save the images during training.
 if not os.path.exists("images"):

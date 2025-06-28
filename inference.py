@@ -19,7 +19,7 @@ import imageio.v2 as imageio
 from data_utils import create_batched_dataset_pipeline, generate_t_vals, pose_spherical, get_rays
 from lego_data_utils import prepare_lego_data
 from fern_data_utils import prepare_fern_data
-from models import NeRFBatchTrainer, create_nerf_complete_model
+from models import NeRFTrainer, create_nerf_complete_model
 
 # tf.random.set_seed(42)
 keras.utils.set_random_seed(42)
@@ -123,7 +123,7 @@ fine_model = create_nerf_complete_model(
 print(f"Fine Model Summary:")
 print(fine_model.summary(expand_nested=True))
 
-nerf_trainer = NeRFBatchTrainer(
+nerf_trainer = NeRFTrainer(
     coarse_model=coarse_model,
     fine_model=fine_model,
     batch_size=BATCH_SIZE,
