@@ -186,12 +186,22 @@ u_shape = [batch_size, NS_FINE]
 
 # u = tf.random.uniform(shape=u_shape)
 u = keras.random.uniform(shape=u_shape)
-# indices = tf.searchsorted(cdf, u, side="right")
-indices = ops.searchsorted(cdf, u, side="right")
+indices = tf.searchsorted(cdf, u, side="right")
 
-below = tf.maximum(0, indices-1)
-above = tf.minimum(cdf.shape[-1]-1, indices)
-indices_g = tf.stack([below, above], axis=-1)
+# def searchsorted_fn(cdf_row, u_row):
+#     return ops.searchsorted(cdf_row, u_row, side="right")
+
+# indices = ops.vectorized_map(
+#     lambda args: searchsorted_fn(args[0], args[1]),
+#     (cdf, u)
+# )
+
+# below = tf.maximum(0, indices-1)
+below = ops.maximum(0, indices-1)
+# above = tf.minimum(cdf.shape[-1]-1, indices)
+above = ops.minimum(cdf.shape[-1]-1, indices)
+# indices_g = tf.stack([below, above], axis=-1)
+indices_g = ops.stack([below, above], axis=-1)
 
 print(f"\n indices_g {indices_g.shape}: (min: {np.min(indices_g)}, max: {np.max(indices_g)})")
 

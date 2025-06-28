@@ -337,9 +337,17 @@ def prepare_fern_data(target_height, target_width):
     # Load fern dataset
     datadir =  "data/nerf_example_data/nerf_llff_data/fern"
     images, poses_ori, bds, render_poses, i_test = load_fern_data(datadir, factor=8, recenter=True, bd_factor=.75, spherify=False)
+    print(f"[prepare_fern_data] Loaded data with shape: images={images.shape}, poses_ori={poses_ori.shape}, bds={bds.shape}, render_poses={render_poses.shape}, i_test={i_test}")
+
+    H = images.shape[1]
+    W = images.shape[2]
 
     # Resize images
-    images_r  = tf.image.resize(images, (target_height, target_width)).numpy()
+    if H != target_height or W != target_width:
+        print(f"Resizing images from ({H}, {W}) to ({target_height}, {target_width})")
+        images_r  = tf.image.resize(images, (target_height, target_width)).numpy()
+    else:
+        images_r = images
 
     # Get focal lengths
     _, _, focal = poses_ori[0, :3, -1]
