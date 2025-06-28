@@ -83,7 +83,3 @@ python inference.py --config config/lego_batch_h256.json
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-Specify your project's license here (e.g., MIT, Apache 2.0).
