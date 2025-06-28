@@ -194,91 +194,92 @@ class TrainCallback(keras.callbacks.Callback):
         history["losses"] = loss_list
         history["psnrs"] = psnr_list
 
-        # Predict with volume rendering
-        nsample = 2 * H * W
-        val_ray_ori_samples = val_ray_oris_s[:nsample]
-        val_ray_dir_samples = val_ray_dirs_s[:nsample]
+        if (epoch + 1) % 50 == 0:
+            # Predict with volume rendering
+            nsample = 1 * H * W
+            val_ray_ori_samples = val_ray_oris_s[:nsample]
+            val_ray_dir_samples = val_ray_dirs_s[:nsample]
 
-        t_vals = generate_t_vals(near, far, ops.shape(val_ray_ori_samples)[0], NS_COARSE, rand_sampling=False)
-        rgbs, depths, _, _ = self.model.forward_pass(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, training=False)
+            t_vals = generate_t_vals(near, far, ops.shape(val_ray_ori_samples)[0], NS_COARSE, rand_sampling=False)
+            rgbs, depths, _, _ = self.model.forward_pass(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, training=False)
 
-        (_, test_recons_images) = rgbs
-        (_, depth_maps) = depths
+            (_, test_recons_images) = rgbs
+            (_, depth_maps) = depths
 
-        # Reshape the test_recons_images and depth_maps to (nb, H, W, 3) and (nb, H, W) respectively.
-        nb = int(ops.shape(test_recons_images)[0] / (H * W))
-        test_recons_images = ops.reshape(test_recons_images, (nb, H, W, 3))
-        depth_maps = ops.reshape(depth_maps, (nb, H, W))
-        
-        # Save weights of self.model.nerf_model
-        if WITH_GCS:
-            if not tf.io.gfile.exists(checkpoint_dir):
-                tf.io.gfile.makedirs(checkpoint_dir)
-
-            print(f"Created GCS directory: {checkpoint_dir}")
-            weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
-        else:
-            if not os.path.exists(checkpoint_dir):
-                os.makedirs(checkpoint_dir)
-
-            print(f"Created Local directory: {checkpoint_dir}")
-            weight_path = os.path.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
-
-        self.model.save_weights(weight_path)
-
-        # Plot the rgb, depth and the loss plot.
-        fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(20, 5))
-        ax[0].imshow(keras.utils.array_to_img(test_recons_images[0]))
-        ax[0].set_title(f"Predicted Image: {epoch:03d}")
-
-        ax[1].imshow(keras.utils.array_to_img(depth_maps[0, ..., None]))
-        ax[1].set_title(f"Depth Map: {epoch:03d}")
-
-        ax[2].plot(loss_list)
-        ax[2].set_xticks(np.arange(0, EPOCHS + 1, 5.0))
-        ax[2].set_title(f"Loss Plot: {epoch:03d}")
-
-        if WITH_GCS:
-            if not tf.io.gfile.exists(visualization_dir):
-                tf.io.gfile.makedirs(visualization_dir)
-            img_path = tf.io.gfile.join(visualization_dir, f"{epoch:03d}.png")
-
-            # Save figure to a BytesIO buffer
-            buf = io.BytesIO()
-            fig.savefig(buf, format='png')
-            buf.seek(0) # Rewind buffer to the beginning
-            # Write buffer to GCS
-            with tf.io.gfile.GFile(img_path, 'wb') as f:
-                f.write(buf.getvalue())
-            print(f"Saved image to GCS: {img_path}")
-            buf.close()
-
-            # Save history to a JSON file
-            history_path = tf.io.gfile.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.json")
-            try:
-                history_json_string = json.dumps(history)
-                with tf.io.gfile.GFile(history_path, 'w') as f_json:
-                    f_json.write(history_json_string)
-            except Exception as e:
-                print(f"Error saving history to GCS: {e}")
+            # Reshape the test_recons_images and depth_maps to (nb, H, W, 3) and (nb, H, W) respectively.
+            nb = int(ops.shape(test_recons_images)[0] / (H * W))
+            test_recons_images = ops.reshape(test_recons_images, (nb, H, W, 3))
+            depth_maps = ops.reshape(depth_maps, (nb, H, W))
             
+            # Save weights of self.model.nerf_model
+            if WITH_GCS:
+                if not tf.io.gfile.exists(checkpoint_dir):
+                    tf.io.gfile.makedirs(checkpoint_dir)
 
-        else:
-            img_dir = f"images/{checkpoint_dir}"
-            if not os.path.exists(img_dir):
-                os.makedirs(img_dir)
+                print(f"Created GCS directory: {checkpoint_dir}")
+                weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
+            else:
+                if not os.path.exists(checkpoint_dir):
+                    os.makedirs(checkpoint_dir)
 
-            img_path = os.path.join(img_dir, f"{epoch:03d}.png")
+                print(f"Created Local directory: {checkpoint_dir}")
+                weight_path = os.path.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
 
-            fig.savefig(img_path)
+            self.model.save_weights(weight_path)
 
-            # Save history to a JSON file
-            history_path = os.path.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE +NS_FINE}_ep{EPOCHS}.json")
-            with open(history_path, 'w') as f:
-                json.dump(history, f)
+            # Plot the rgb, depth and the loss plot.
+            fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(20, 5))
+            ax[0].imshow(keras.utils.array_to_img(test_recons_images[0]))
+            ax[0].set_title(f"Predicted Image: {epoch:03d}")
 
-        # plt.show()
-        # plt.close()
+            ax[1].imshow(keras.utils.array_to_img(depth_maps[0, ..., None]))
+            ax[1].set_title(f"Depth Map: {epoch:03d}")
+
+            ax[2].plot(loss_list)
+            ax[2].set_xticks(np.arange(0, EPOCHS + 1, 5.0))
+            ax[2].set_title(f"Loss Plot: {epoch:03d}")
+
+            if WITH_GCS:
+                if not tf.io.gfile.exists(visualization_dir):
+                    tf.io.gfile.makedirs(visualization_dir)
+                img_path = tf.io.gfile.join(visualization_dir, f"{epoch:03d}.png")
+
+                # Save figure to a BytesIO buffer
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png')
+                buf.seek(0) # Rewind buffer to the beginning
+                # Write buffer to GCS
+                with tf.io.gfile.GFile(img_path, 'wb') as f:
+                    f.write(buf.getvalue())
+                print(f"Saved image to GCS: {img_path}")
+                buf.close()
+
+                # Save history to a JSON file
+                history_path = tf.io.gfile.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.json")
+                try:
+                    history_json_string = json.dumps(history)
+                    with tf.io.gfile.GFile(history_path, 'w') as f_json:
+                        f_json.write(history_json_string)
+                except Exception as e:
+                    print(f"Error saving history to GCS: {e}")
+                
+
+            else:
+                img_dir = f"images/{checkpoint_dir}"
+                if not os.path.exists(img_dir):
+                    os.makedirs(img_dir)
+
+                img_path = os.path.join(img_dir, f"{epoch:03d}.png")
+
+                fig.savefig(img_path)
+
+                # Save history to a JSON file
+                history_path = os.path.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE +NS_FINE}_ep{EPOCHS}.json")
+                with open(history_path, 'w') as f:
+                    json.dump(history, f)
+
+            # plt.show()
+            # plt.close()
 
 
 # Build nerf_trainer
