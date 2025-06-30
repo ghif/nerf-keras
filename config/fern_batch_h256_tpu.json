@@ -1,5 +1,6 @@
 {
     "BATCH_SIZE": 4096,
+    "TEST_BATCH_SIZE": 4096,
     "NS_COARSE": 64,
     "NS_FINE": 128,
     "HEIGHT": 378,

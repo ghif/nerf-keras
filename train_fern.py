@@ -35,6 +35,7 @@ config_filename = os.path.splitext(os.path.basename(args.config))[0]
 
 # Initialize global variables.
 BATCH_SIZE = conf["BATCH_SIZE"]
+TEST_BATCH_SIZE = conf["TEST_BATCH_SIZE"]
 NS_COARSE = conf["NS_COARSE"]
 NS_FINE = conf["NS_FINE"]
 L_XYZ = conf["L_XYZ"]
@@ -187,8 +188,9 @@ class TrainCallback(keras.callbacks.Callback):
         val_ray_ori_samples = val_ray_oris_s[:nsample]
         val_ray_dir_samples = val_ray_dirs_s[:nsample]
 
-        t_vals = generate_t_vals(near, far, ops.shape(val_ray_ori_samples)[0], NS_COARSE, rand_sampling=True)
-        rgbs, depths, _, _ = self.model.forward_pass(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, training=False)
+        t_vals = generate_t_vals(near, far, ops.shape(val_ray_ori_samples)[0], NS_COARSE, rand_sampling=False)
+
+        rgbs, depths, _, _ = self.model.forward_pass_with_minibatch(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, batch_size=TEST_BATCH_SIZE, training=False)
 
         (_, test_recons_images) = rgbs
         (_, depth_maps) = depths

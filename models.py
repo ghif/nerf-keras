@@ -2,6 +2,7 @@ import keras
 from keras import layers
 from keras import ops
 import tensorflow as tf
+import numpy as np
 
 from data_utils import sample_pdf, sample_rays, encode_position, volume_render
 
@@ -166,3 +167,56 @@ class NeRFTrainer(keras.Model):
         # predictions_fine = self.fine_model.predict([rays_fine_enc, dirs_fine_enc], batch_size=128)
         rgb_fine, depth_fine, weights_fine = volume_render(predictions_fine, t_vals_fine_all)
         return (rgb_coarse, rgb_fine), (depth_coarse, depth_fine), (weights_coarse, weights_fine), (predictions_coarse, predictions_fine)
+    
+    def forward_pass_with_minibatch(self, ray_origins, ray_directions, t_vals, l_xyz, l_dir, batch_size=512, training=False):
+        
+        # Split the samples into batches to avoid memory issues
+        num_batches = int(np.ceil(ops.shape(ray_origins)[0] / batch_size))
+
+        # Initialize empty lists to store results
+        rgbs_coarse_list = []
+        rgbs_fine_list = []
+        depths_coarse_list = []
+        depths_fine_list = []
+        weights_coarse_list = []
+        weights_fine_list = []
+        preds_coarse_list = []
+        preds_fine_list = []
+
+        for i in range(num_batches):
+            # Calculate the start and end indices for the current batch
+            start_idx = i * batch_size
+            end_idx = min((i + 1) * batch_size, ops.shape(ray_origins)[0])
+            ray_ori_samples_batch = ray_origins[start_idx:end_idx]
+            ray_dir_samples_batch = ray_directions[start_idx:end_idx]
+            t_vals_batch = t_vals[start_idx:end_idx]
+
+            # Forward pass for the current batch
+            rgbs_batch, depths_batch, weights_batch, preds_batch = self.forward_pass(ray_ori_samples_batch, ray_dir_samples_batch, t_vals_batch, l_xyz, l_dir, training=training)
+
+            (rgbs_coarse_b, rgbs_fine_b) = rgbs_batch
+            (depths_coarse_b, depths_fine_b) = depths_batch
+            (weights_coarse_b, weights_fine_b) = weights_batch
+            (preds_coarse_b, preds_fine_b) = preds_batch
+
+            # Append the results to the lists
+            rgbs_coarse_list.append(rgbs_coarse_b)
+            rgbs_fine_list.append(rgbs_fine_b)
+            depths_coarse_list.append(depths_coarse_b)
+            depths_fine_list.append(depths_fine_b)
+            weights_coarse_list.append(weights_coarse_b)
+            weights_fine_list.append(weights_fine_b)
+            preds_coarse_list.append(preds_coarse_b)
+            preds_fine_list.append(preds_fine_b)
+
+        # Concatenate the results from all batches
+        rgbs_coarse = ops.concatenate(rgbs_coarse_list, axis=0)
+        rgbs_fine = ops.concatenate(rgbs_fine_list, axis=0)
+        depths_coarse = ops.concatenate(depths_coarse_list, axis=0)
+        depths_fine = ops.concatenate(depths_fine_list, axis=0)
+        weights_coarse = ops.concatenate(weights_coarse_list, axis=0)
+        weights_fine = ops.concatenate(weights_fine_list, axis=0)
+        preds_coarse = ops.concatenate(preds_coarse_list, axis=0)
+        preds_fine = ops.concatenate(preds_fine_list, axis=0)
+        
+        return (rgbs_coarse, rgbs_fine), (depths_coarse, depths_fine), (weights_coarse, weights_fine), (preds_coarse, preds_fine)

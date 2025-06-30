@@ -1,5 +1,6 @@
 {
     "BATCH_SIZE": 512,
+    "TEST_BATCH_SIZE": 128,
     "NS_COARSE": 16,
     "NS_FINE": 32,
     "HEIGHT": 50,
@@ -12,5 +13,5 @@
     "EPOCHS": 1000,
     "LEARNING_RATE": 0.0005,
     "BATCH_NORM": true,
-    "WITH_GCS": true
+    "WITH_GCS": false
 }
