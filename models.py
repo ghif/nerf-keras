@@ -170,9 +170,13 @@ class NeRFTrainer(keras.Model):
         return (rgb_coarse, rgb_fine), (depth_coarse, depth_fine), (weights_coarse, weights_fine), (predictions_coarse, predictions_fine)
     
     def forward_pass_with_minibatch(self, ray_origins, ray_directions, t_vals, l_xyz, l_dir, batch_size=512, training=False):
+
+        # Create TF dataset to exploit parallel processing
+        dataset = tf.data.Dataset.from_tensor_slices((ray_origins, ray_directions, t_vals))
+        dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
         
-        # Split the samples into batches to avoid memory issues
-        num_batches = int(np.ceil(ops.shape(ray_origins)[0] / batch_size))
+        # # Split the samples into batches to avoid memory issues
+        # num_batches = int(np.ceil(ops.shape(ray_origins)[0] / batch_size))
 
         # Initialize empty lists to store results
         rgbs_coarse_list = []
@@ -184,14 +188,15 @@ class NeRFTrainer(keras.Model):
         preds_coarse_list = []
         preds_fine_list = []
 
-        for i in tqdm(range(num_batches), desc="Processing batches"):
+        for (ray_ori_samples_batch, ray_dir_samples_batch, t_vals_batch) in tqdm(dataset, desc="Processing batches"):
+        # for i in tqdm(range(num_batches), desc="Processing batches"):
         # for i in range(num_batches):
             # Calculate the start and end indices for the current batch
-            start_idx = i * batch_size
-            end_idx = min((i + 1) * batch_size, ops.shape(ray_origins)[0])
-            ray_ori_samples_batch = ray_origins[start_idx:end_idx]
-            ray_dir_samples_batch = ray_directions[start_idx:end_idx]
-            t_vals_batch = t_vals[start_idx:end_idx]
+            # start_idx = i * batch_size
+            # end_idx = min((i + 1) * batch_size, ops.shape(ray_origins)[0])
+            # ray_ori_samples_batch = ray_origins[start_idx:end_idx]
+            # ray_dir_samples_batch = ray_directions[start_idx:end_idx]
+            # t_vals_batch = t_vals[start_idx:end_idx]
 
             # Forward pass for the current batch
             rgbs_batch, depths_batch, weights_batch, preds_batch = self.forward_pass(ray_ori_samples_batch, ray_dir_samples_batch, t_vals_batch, l_xyz, l_dir, training=training)
