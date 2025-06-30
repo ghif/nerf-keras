@@ -148,13 +148,15 @@ class NeRFTrainer(keras.Model):
     def metrics(self):
         return [self.loss_tracker, self.psnr_tracker]
     
-    def forward_pass(self, ray_origins, ray_directions, t_vals, l_xyz, l_dir, training=False):
+    def forward_pass(self, ray_origins, ray_directions, t_vals, l_xyz, l_dir, training=False, batch_size=512):
         rays, dirs = sample_rays(ray_origins, ray_directions, t_vals)
         rays_enc = encode_position(rays, pos_encode_dims=l_xyz)
         dirs_enc = encode_position(dirs, pos_encode_dims=l_dir)
         
-        
-        predictions_coarse = self.coarse_model([rays_enc, dirs_enc], training=training)
+        if training:
+            predictions_coarse = self.coarse_model([rays_enc, dirs_enc], training=True)
+        else:
+            predictions_coarse = self.coarse_model.predict([rays_enc, dirs_enc], batch_size=batch_size)
         # predictions_coarse = self.coarse_model.predict([rays_enc, dirs_enc], batch_size=128)
         rgb_coarse, depth_coarse, weights_coarse = volume_render(predictions_coarse, t_vals)
         t_vals_coarse_mid = (0.5 * (t_vals[..., 1:] + t_vals[..., :-1]))
@@ -170,9 +172,7 @@ class NeRFTrainer(keras.Model):
         rgb_fine, depth_fine, weights_fine = volume_render(predictions_fine, t_vals_fine_all)
         return (rgb_coarse, rgb_fine), (depth_coarse, depth_fine), (weights_coarse, weights_fine), (predictions_coarse, predictions_fine)
     
-    @tf.function
     def forward_pass_with_minibatch(self, ray_origins, ray_directions, t_vals, l_xyz, l_dir, batch_size=512, training=False):
-
         # Create TF dataset to exploit parallel processing
         dataset = tf.data.Dataset.from_tensor_slices((ray_origins, ray_directions, t_vals))
         dataset = (
