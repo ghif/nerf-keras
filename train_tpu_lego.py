@@ -218,12 +218,26 @@ class TrainCallback(keras.callbacks.Callback):
 
                 print(f"Created GCS directory: {checkpoint_dir}")
                 weight_path = tf.io.gfile.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
+
+                # Save history to a JSON file
+                history_path = tf.io.gfile.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.json")
+                try:
+                    history_json_string = json.dumps(history)
+                    with tf.io.gfile.GFile(history_path, 'w') as f_json:
+                        f_json.write(history_json_string)
+                except Exception as e:
+                    print(f"Error saving history to GCS: {e}")
             else:
                 if not os.path.exists(checkpoint_dir):
                     os.makedirs(checkpoint_dir)
 
                 print(f"Created Local directory: {checkpoint_dir}")
                 weight_path = os.path.join(checkpoint_dir, f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5")
+
+                # Save history to a JSON file
+                history_path = os.path.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE +NS_FINE}_ep{EPOCHS}.json")
+                with open(history_path, 'w') as f:
+                    json.dump(history, f)
 
             self.model.save_weights(weight_path)
 
@@ -253,15 +267,6 @@ class TrainCallback(keras.callbacks.Callback):
                     f.write(buf.getvalue())
                 print(f"Saved image to GCS: {img_path}")
                 buf.close()
-
-                # Save history to a JSON file
-                history_path = tf.io.gfile.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.json")
-                try:
-                    history_json_string = json.dumps(history)
-                    with tf.io.gfile.GFile(history_path, 'w') as f_json:
-                        f_json.write(history_json_string)
-                except Exception as e:
-                    print(f"Error saving history to GCS: {e}")
                 
 
             else:
@@ -272,11 +277,6 @@ class TrainCallback(keras.callbacks.Callback):
                 img_path = os.path.join(img_dir, f"{epoch:03d}.png")
 
                 fig.savefig(img_path)
-
-                # Save history to a JSON file
-                history_path = os.path.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE +NS_FINE}_ep{EPOCHS}.json")
-                with open(history_path, 'w') as f:
-                    json.dump(history, f)
 
             # plt.show()
             # plt.close()

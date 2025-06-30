@@ -196,14 +196,16 @@ class TrainCallback(keras.callbacks.Callback):
         history["losses"] = loss_list
         history["psnrs"] = psnr_list
 
-        if (epoch + 1) % 1 == 0:
+        if (epoch + 1) % 10 == 0:
             # Predict with volume rendering
             nsample = 1 * H * W
             val_ray_ori_samples = val_ray_oris_s[:nsample]
             val_ray_dir_samples = val_ray_dirs_s[:nsample]
 
             t_vals = generate_t_vals(near, far, ops.shape(val_ray_ori_samples)[0], NS_COARSE, rand_sampling=True)
-            rgbs, depths, _, _ = self.model.forward_pass(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, batch_size=TEST_BATCH_SIZE, training=False)
+            # rgbs, depths, _, _ = self.model.forward_pass(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, batch_size=TEST_BATCH_SIZE, training=False)
+            rgbs, depths, _, _ = self.model.forward_pass_with_minibatch(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, batch_size=TEST_BATCH_SIZE, training=False)
+
 
             (_, test_recons_images) = rgbs
             (_, depth_maps) = depths
@@ -221,12 +223,26 @@ class TrainCallback(keras.callbacks.Callback):
 
                 print(f"Created GCS directory: {checkpoint_dir}")
                 weight_path = tf.io.gfile.join(checkpoint_dir, f"{weight_file_prefix}.weights.h5")
+
+                # Save history to a JSON file
+                history_path = tf.io.gfile.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.json")
+                try:
+                    history_json_string = json.dumps(history)
+                    with tf.io.gfile.GFile(history_path, 'w') as f_json:
+                        f_json.write(history_json_string)
+                except Exception as e:
+                    print(f"Error saving history to GCS: {e}")
             else:
                 if not os.path.exists(checkpoint_dir):
                     os.makedirs(checkpoint_dir)
 
                 print(f"Created Local directory: {checkpoint_dir}")
                 weight_path = os.path.join(checkpoint_dir, f"{weight_file_prefix}.weights.h5")
+
+                # Save history to a JSON file
+                history_path = os.path.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE +NS_FINE}_ep{EPOCHS}.json")
+                with open(history_path, 'w') as f:
+                    json.dump(history, f)
 
             self.model.save_weights(weight_path)
             print(f"Saved model weights to: {weight_path}")
@@ -258,29 +274,12 @@ class TrainCallback(keras.callbacks.Callback):
                 print(f"Saved image to GCS: {img_path}")
                 buf.close()
 
-                # Save history to a JSON file
-                history_path = tf.io.gfile.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.json")
-                try:
-                    history_json_string = json.dumps(history)
-                    with tf.io.gfile.GFile(history_path, 'w') as f_json:
-                        f_json.write(history_json_string)
-                except Exception as e:
-                    print(f"Error saving history to GCS: {e}")
-                
-
             else:
                 img_dir = f"images/{checkpoint_dir}"
                 if not os.path.exists(img_dir):
                     os.makedirs(img_dir)
-
                 img_path = os.path.join(img_dir, f"{epoch:03d}.png")
-
                 fig.savefig(img_path)
-
-                # Save history to a JSON file
-                history_path = os.path.join(checkpoint_dir, f"history_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE +NS_FINE}_ep{EPOCHS}.json")
-                with open(history_path, 'w') as f:
-                    json.dump(history, f)
 
             # plt.show()
             # plt.close()
