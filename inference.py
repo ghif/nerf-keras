@@ -166,7 +166,7 @@ else:
     weight_path = os.path.join(MODEL_DIR, f"{weight_file_prefix}.weights.h5")
     if not os.path.exists(weight_path):
         print(f"Model weights not found at {weight_path}.")
-        
+
 nerf_trainer.load_weights(weight_path)
 print("Model weights loaded successfully.")
 
@@ -266,6 +266,7 @@ for index, theta in tqdm(enumerate(np.linspace(-45.0, 45.0, 30, endpoint=False))
         
 rgb_video = f"{config_filename}_rgb_video_tpu.mp4"
 imageio.mimwrite(rgb_video, rgb_frames, fps=30, quality=7, macro_block_size=None)
+print(f"Video saved to {rgb_video}")
 
 # # Iterate over different theta value and generate scenes.
 # for index, theta in tqdm(enumerate(np.linspace(0.0, 360.0, 120, endpoint=False))):
