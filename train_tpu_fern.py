@@ -81,7 +81,7 @@ except Exception as e:
     print(f"Failed to initialize TPU: {e}")
 
 # Load Fern dataset
-(train_data, val_data, bounds) = prepare_fern_data(H, W)
+(train_data, val_data, bounds) = prepare_fern_data(H, W, from_gcs=WITH_GCS)
 (train_images_s, train_ray_oris_s, train_ray_dirs_s) = train_data
 (val_images_s, val_ray_oris_s, val_ray_dirs_s) = val_data
 (near, far) = bounds

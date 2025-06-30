@@ -1,5 +1,6 @@
 import numpy as np
-import os, imageio
+import os
+import imageio.v2 as imageio
 from data_utils import get_rays, sample_rays
 import tensorflow as tf
 from keras import ops
@@ -38,7 +39,7 @@ def _minify(basedir, factors=[], resolutions=[]):
         if os.path.exists(imgdir):
             continue
             
-        print('Minifying', r, basedir)
+        print('[_minify] Minifying', r, basedir)
         
         os.makedirs(imgdir)
         check_output('cp {}/* {}'.format(imgdir_orig, imgdir), shell=True)
@@ -55,8 +56,79 @@ def _minify(basedir, factors=[], resolutions=[]):
             print('Removed duplicates')
         print('Done')
             
+def _minify_gcs(basedir, factors=[], resolutions=[]):
+    needtoload = False
+    for r in factors:
+        imgdir = os.path.join(basedir, 'images_{}'.format(r))
+        if not tf.io.gfile.exists(imgdir):
+            needtoload = True
+    for r in resolutions:
+        imgdir = os.path.join(basedir, 'images_{}x{}'.format(r[1], r[0]))
+        if not tf.io.gfile.exists(imgdir):
+            needtoload = True
+    if not needtoload:
+        return
+    
+    from shutil import copy
+    from subprocess import check_output
+    
+    imgdir = os.path.join(basedir, 'images')
+    imgs = [os.path.join(imgdir, f) for f in sorted(tf.io.gfile.listdir(imgdir))]
+    imgs = [f for f in imgs if any([f.endswith(ex) for ex in ['JPG', 'jpg', 'png', 'jpeg', 'PNG']])]
+
+    # Create a temporary local directory to process images
+    local_tmp_dir = "/tmp/minify_images"
+    if not os.path.exists(local_tmp_dir):
+        os.makedirs(local_tmp_dir)
+
+    # Download images from GCS to local tmp directory
+    for img in imgs:
+        local_img_path = os.path.join(local_tmp_dir, os.path.basename(img))
+        tf.io.gfile.copy(img, local_img_path, overwrite=True)
+    
+    wd = os.getcwd()
+
+    for r in factors + resolutions:
+        if isinstance(r, int):
+            name = 'images_{}'.format(r)
+            resizearg = '{}%'.format(100./r)
+        else:
+            name = 'images_{}x{}'.format(r[1], r[0])
+            resizearg = '{}x{}'.format(r[1], r[0])
+        imgdir = os.path.join(basedir, name)
+        if os.io.gfile.exists(imgdir):
+            continue
+            
+        print('[_minify_gcs] Minifying', r, basedir)
+        
+        # Create a local directory for resized images
+        local_resized_dir = os.path.join(local_tmp_dir, name)
+        if not os.path.exists(local_resized_dir):
+            os.makedirs(local_resized_dir)
+        
+        # Copy original images to the resized directory
+        for img in imgs:
+            local_img_path = os.path.join(local_tmp_dir, os.path.basename(img))
+            local_resized_img_path = os.path.join(local_resized_dir, os.path.basename(img))
+            copy(local_img_path, local_resized_img_path)
         
         
+        ext = imgs[0].split('.')[-1]
+        args = ' '.join(['mogrify', '-resize', resizearg, '-format', 'png', '*.{}'.format(ext)])
+        print(args)
+        os.chdir(imgdir)
+        check_output(args, shell=True)
+        os.chdir(wd)
+        
+        if ext != 'png':
+            # check_output('rm {}/*.{}'.format(imgdir, ext), shell=True)
+            for img in os.listdir(local_resized_dir):
+                if img.endswith(ext):
+                    os.remove(os.path.join(local_resized_dir, img))
+            print('Removed duplicates')
+        
+        imgdir
+        print('Done')
         
 def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
     
@@ -116,9 +188,65 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
     print('Loaded image data', imgs.shape, poses[:,-1,0])
     return poses, bds, imgs
 
+
+def _load_data_gcs(basedir, factor=None, width=None, height=None, load_imgs=True):
+    poses_arr = np.load(tf.io.gfile.GFile(os.path.join(basedir, 'poses_bounds.npy'), 'rb'))
+    poses = poses_arr[:, :-2].reshape([-1, 3, 5]).transpose([1,2,0])
+    bds = poses_arr[:, -2:].transpose([1,0])
     
-            
+    img0 = [os.path.join(basedir, 'images', f) for f in sorted(tf.io.gfile.listdir(os.path.join(basedir, 'images'))) \
+            if f.endswith('JPG') or f.endswith('jpg') or f.endswith('png')][0]
+    
+    sh = imageio.imread(tf.io.gfile.GFile(img0, 'rb')).shape
+    
+    sfx = ''
+    
+    if factor is not None:
+        sfx = '_{}'.format(factor)
+        _minify_gcs(basedir, factors=[factor])
+        factor = factor
+    elif height is not None:
+        factor = sh[0] / float(height)
+        width = int(sh[1] / factor)
+        _minify_gcs(basedir, resolutions=[[height, width]])
+        sfx = '_{}x{}'.format(width, height)
+    elif width is not None:
+        factor = sh[1] / float(width)
+        height = int(sh[0] / factor)
+        _minify_gcs(basedir, resolutions=[[height, width]])
+        sfx = '_{}x{}'.format(width, height)
+    else:
+        factor = 1
+    
+    imgdir = os.path.join(basedir, 'images' + sfx)
+    if not tf.io.gfile.exists(imgdir):
+        print( imgdir, 'does not exist, returning' )
+        return
+    
+    imgfiles = [os.path.join(imgdir, f) for f in sorted(tf.io.gfile.listdir(imgdir)) if f.endswith('JPG') or f.endswith('jpg') or f.endswith('png')]
+    if poses.shape[-1] != len(imgfiles):
+        print( 'Mismatch between imgs {} and poses {} !!!!'.format(len(imgfiles), poses.shape[-1]) )
+        return
+    
+    sh = imageio.imread(tf.io.gfile.GFile(imgfiles[0], 'rb')).shape
+    poses[:2, 4, :] = np.array(sh[:2]).reshape([2, 1])
+    poses[2, 4, :] = poses[2, 4, :] * 1./factor
+    
+    if not load_imgs:
+        return poses, bds
+    
+    def imread(f):
+        if f.endswith('png'):
+            return imageio.imread(tf.io.gfile.GFile(f, "rb"), apply_gamma=True)
+        else:
+            return imageio.imread(tf.io.gfile.GFile(f, "rb"))
         
+    imgs = imgs = [imread(f)[...,:3]/255. for f in imgfiles]
+    imgs = np.stack(imgs, -1)  
+    
+    print('Loaded image data', imgs.shape, poses[:,-1,0])
+    return poses, bds, imgs
+            
 
 def normalize(x):
     return x / np.linalg.norm(x)
@@ -238,7 +366,7 @@ def spherify_poses(poses, bds):
     return poses_reset, new_poses, bds
     
 
-def load_fern_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=False, path_zflat=False):
+def load_fern_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=False, path_zflat=False, from_gcs=False):
     """
     Load Fern data from the specified directory.
 
@@ -256,8 +384,10 @@ def load_fern_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
         render_poses (np.ndarray): Poses for rendering.
         i_test (int): Index of the holdout view.
     """
-
-    poses, bds, imgs = _load_data(basedir, factor=factor) # factor=8 downsamples original imgs by 8x
+    if from_gcs:
+        poses, bds, imgs = _load_data_gcs(basedir, factor=factor)
+    else:
+        poses, bds, imgs = _load_data(basedir, factor=factor) # factor=8 downsamples original imgs by 8x
     print('Loaded', basedir, bds.min(), bds.max())
     
     # Correct rotation matrix ordering and move variable dim to axis 0
@@ -329,10 +459,14 @@ def load_fern_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
 
     return images, poses, bds, render_poses, i_test
 
-def prepare_fern_data(target_height, target_width):
+def prepare_fern_data(target_height, target_width, from_gcs=False):
     # Load fern dataset
-    datadir =  "data/nerf_example_data/nerf_llff_data/fern"
-    images, poses_ori, bds, render_poses, i_test = load_fern_data(datadir, factor=8, recenter=True, bd_factor=.75, spherify=False)
+    if from_gcs:
+        datadir = "gs://dataset-nerf/nerf_llff_data/fern"
+    else:
+        datadir =  "data/nerf_example_data/nerf_llff_data/fern"
+    
+    images, poses_ori, bds, render_poses, i_test = load_fern_data(datadir, factor=8, recenter=True, bd_factor=.75, spherify=False, from_gcs=from_gcs)
     print(f"[prepare_fern_data] Loaded data with shape: images={images.shape}, poses_ori={poses_ori.shape}, bds={bds.shape}, render_poses={render_poses.shape}, i_test={i_test}")
 
     H = images.shape[1]
@@ -387,91 +521,93 @@ def prepare_fern_data(target_height, target_width):
 
 if __name__ == "__main__":
     # Example usage
-    basedir = "data/nerf_example_data/nerf_llff_data/fern"
-    images, poses_ori, bds, render_poses, i_test = load_fern_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=False)
+    (train_images_s, train_ray_oris_s, train_ray_dirs_s), (val_images_s, val_ray_oris_s, val_ray_dirs_s), (near, far) = prepare_fern_data(240, 320, from_gcs=True)
+    # basedir = "data/nerf_example_data/nerf_llff_data/fern"
+    # images, poses_ori, bds, render_poses, i_test = load_fern_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=False)
     
-    print("Images shape:", images.shape)
-    print("Poses shape:", poses_ori.shape)
-    print("Bounds shape:", bds.shape)
-    print("Render poses shape:", render_poses.shape)
-    print("Test index:", i_test)
+    # print("Images shape:", images.shape)
+    # print("Poses shape:", poses_ori.shape)
+    # print("Bounds shape:", bds.shape)
+    # print("Render poses shape:", render_poses.shape)
+    # print("Test index:", i_test)
 
-    hwf = poses_ori[0, :3, -1]
-    h, w, focal = hwf
-    h = int(h)
-    w = int(w)
-    print(f"Camera parameters (h, w, focal): {h, w, focal}")
-    poses = poses_ori[:, :3, :4]  # Keep only the rotation and translation part
-    print("Camera poses shape:", poses.shape)
 
-    if not isinstance(i_test, list):
-        i_test = [i_test]
+    # hwf = poses_ori[0, :3, -1]
+    # h, w, focal = hwf
+    # h = int(h)
+    # w = int(w)
+    # print(f"Camera parameters (h, w, focal): {h, w, focal}")
+    # poses = poses_ori[:, :3, :4]  # Keep only the rotation and translation part
+    # print("Camera poses shape:", poses.shape)
 
-    i_val = i_test
-    i_train = np.array([i for i in np.arange(int(images.shape[0])) if
-                            (i not in i_test and i not in i_val)])
+    # if not isinstance(i_test, list):
+    #     i_test = [i_test]
+
+    # i_val = i_test
+    # i_train = np.array([i for i in np.arange(int(images.shape[0])) if
+    #                         (i not in i_test and i not in i_val)])
     
-    print("Defining Bounds ...")
-    near = np.min(bds) * 0.9
-    far = np.max(bds) * 1.
+    # print("Defining Bounds ...")
+    # near = np.min(bds) * 0.9
+    # far = np.max(bds) * 1.
 
-    pose0 = poses[0]
-    ray_origins, ray_directions = get_rays(h, w, focal, pose0)
-    print(f"Ray origins shape: {ray_origins.shape}")
-    print(f"Ray directions shape: {ray_directions.shape}")
+    # pose0 = poses[0]
+    # ray_origins, ray_directions = get_rays(h, w, focal, pose0)
+    # print(f"Ray origins shape: {ray_origins.shape}")
+    # print(f"Ray directions shape: {ray_directions.shape}")
 
-    train_images = images[i_train]
-    train_poses = poses[i_train]
-    val_images = images[i_val]
-    val_poses = poses[i_val]
+    # train_images = images[i_train]
+    # train_poses = poses[i_train]
+    # val_images = images[i_val]
+    # val_poses = poses[i_val]
 
-    print(f"Train images shape: {train_images.shape}")
-    print(f"Train poses shape: {train_poses.shape}")
-    print(f"Validation images shape: {val_images.shape}")
-    print(f"Validation poses shape: {val_poses.shape}")
+    # print(f"Train images shape: {train_images.shape}")
+    # print(f"Train poses shape: {train_poses.shape}")
+    # print(f"Validation images shape: {val_images.shape}")
+    # print(f"Validation poses shape: {val_poses.shape}")
 
-    target_h = int(h / 10)
-    target_w = int(w / 10)
+    # target_h = int(h / 10)
+    # target_w = int(w / 10)
 
-    train_images_r = tf.image.resize(train_images, [target_h, target_w])
+    # train_images_r = tf.image.resize(train_images, [target_h, target_w])
 
-    # Batchify the pixels
-    train_images_s = ops.reshape(train_images_r, [-1, train_images_r.shape[-1]])
+    # # Batchify the pixels
+    # train_images_s = ops.reshape(train_images_r, [-1, train_images_r.shape[-1]])
 
-    # Batchify the rays
-    train_rays = [get_rays(target_h, target_w, focal, pose) for pose in train_poses]
-    train_rays = ops.stack(train_rays, axis=0)
-    train_ray_oris = train_rays[:, 0, ...]
-    train_ray_dirs = train_rays[:, 1, ...]
+    # # Batchify the rays
+    # train_rays = [get_rays(target_h, target_w, focal, pose) for pose in train_poses]
+    # train_rays = ops.stack(train_rays, axis=0)
+    # train_ray_oris = train_rays[:, 0, ...]
+    # train_ray_dirs = train_rays[:, 1, ...]
 
-    train_ray_oris_s = ops.reshape(train_ray_oris, [-1, train_ray_oris.shape[-1]])
-    train_ray_dirs_s = ops.reshape(train_ray_dirs, [-1, train_ray_dirs.shape[-1]])
+    # train_ray_oris_s = ops.reshape(train_ray_oris, [-1, train_ray_oris.shape[-1]])
+    # train_ray_dirs_s = ops.reshape(train_ray_dirs, [-1, train_ray_dirs.shape[-1]])
 
-    print(f"Shape of train_images_s: {train_images_s.shape}")
-    print(f"Shape of train_rays_oris_s: {train_ray_oris_s.shape}")
-    print(f"Shape of train_rays_dirs_s: {train_ray_dirs_s.shape}")
+    # print(f"Shape of train_images_s: {train_images_s.shape}")
+    # print(f"Shape of train_rays_oris_s: {train_ray_oris_s.shape}")
+    # print(f"Shape of train_rays_dirs_s: {train_ray_dirs_s.shape}")
 
-    # train_img_ds = tf.data.Dataset.from_tensor_slices(train_images)
-    # train_pose_ds = tf.data.Dataset.from_tensor_slices(train_poses)
+    # # train_img_ds = tf.data.Dataset.from_tensor_slices(train_images)
+    # # train_pose_ds = tf.data.Dataset.from_tensor_slices(train_poses)
 
-    # Create t_vals
-    num_samples = 64  # Example number of samples
-    t_vals = ops.linspace(near, far, num_samples, dtype="float32")
-    print(f"Shape of t_vals: {t_vals.shape}")
+    # # Create t_vals
+    # num_samples = 64  # Example number of samples
+    # t_vals = ops.linspace(near, far, num_samples, dtype="float32")
+    # print(f"Shape of t_vals: {t_vals.shape}")
 
-    # train_rays_t = train_ray_oris_s[..., None, :] + (train_ray_dirs_s[..., None, :] * t_vals[..., None])
+    # # train_rays_t = train_ray_oris_s[..., None, :] + (train_ray_dirs_s[..., None, :] * t_vals[..., None])
 
-    l_xyz = 10
-    l_dir = 4
+    # l_xyz = 10
+    # l_dir = 4
 
-    # dir_shape = ops.shape(train_rays_t[..., :3])
-    # dirs = ops.broadcast_to(train_ray_dirs_s[..., None, :], dir_shape)
-    # train_rays_enc = encode_position(train_rays_t, l_xyz)
-    # train_ray_dirs = encode_position(train, l_dir)
-    train_rays_enc, train_dirs_enc = sample_rays(train_ray_oris_s, train_ray_dirs_s, t_vals, l_xyz, l_dir)
+    # # dir_shape = ops.shape(train_rays_t[..., :3])
+    # # dirs = ops.broadcast_to(train_ray_dirs_s[..., None, :], dir_shape)
+    # # train_rays_enc = encode_position(train_rays_t, l_xyz)
+    # # train_ray_dirs = encode_position(train, l_dir)
+    # train_rays_enc, train_dirs_enc = sample_rays(train_ray_oris_s, train_ray_dirs_s, t_vals, l_xyz, l_dir)
     
     
-    # train_rays_flat, train_dirs_flat = sample_rays_flat(train_ray_oris_s, train_ray_dirs_s, t_vals, l_xyz, l_dir)
+    # # train_rays_flat, train_dirs_flat = sample_rays_flat(train_ray_oris_s, train_ray_dirs_s, t_vals, l_xyz, l_dir)
     
 
 
