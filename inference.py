@@ -18,7 +18,7 @@ import imageio.v2 as imageio
 
 from data_utils import create_batched_dataset_pipeline, generate_t_vals, pose_spherical, get_rays
 from lego_data_utils import prepare_lego_data
-# from fern_data_utils import prepare_fern_data
+from fern_data_utils import prepare_fern_data
 from models import NeRFTrainer, create_nerf_complete_model
 
 # tf.random.set_seed(42)
@@ -26,8 +26,9 @@ keras.utils.set_random_seed(42)
 
 # Add argument parser
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", type=str, default="config/lego_batch_h256.json")
+# parser.add_argument("--config", type=str, default="config/lego_batch_h256.json")
 # parser.add_argument("--config", type=str, default="config/fern_batch_h256.json")
+parser.add_argument("--config", type=str, default="config/fern_batch_h256_tpu.json")
 args = parser.parse_args()
 
 # Load config json
@@ -59,10 +60,18 @@ MODEL_DIR = "models"
 if not os.path.exists(MODEL_DIR):
     os.makedirs(MODEL_DIR)
 
+# GCS bucket configuration
+GCS_BUCKET_NAME = "keras-models"
+GCS_MODEL_DIR = f"gs://{GCS_BUCKET_NAME}/nerf/models"
+
+if WITH_GCS:
+    checkpoint_dir = os.path.join(GCS_MODEL_DIR, f"{config_filename}-20250630-072149")
+else:
+    checkpoint_dir = os.path.join(MODEL_DIR, f"{config_filename}-20250630-072149")
 
 # Load Lego dataset
-(train_data, val_data, bounds, focal) = prepare_lego_data(H, W)
-# (train_data, val_data, bounds) = prepare_fern_data(H, W)
+# (train_data, val_data, bounds, focal) = prepare_lego_data(H, W)
+(train_data, val_data, bounds, focal) = prepare_fern_data(H, W, from_gcs=WITH_GCS)
 (train_images_s, train_ray_oris_s, train_ray_dirs_s) = train_data
 (val_images_s, val_ray_oris_s, val_ray_dirs_s) = val_data
 (near, far) = bounds
@@ -144,34 +153,47 @@ nerf_trainer.build(input_shape=input_shape_for_build)
 
 # Load the model weights if they exist
 # weight_path = f"{MODEL_DIR}/{config_filename}-best/nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5"
-weight_path = f"{MODEL_DIR}/{config_filename}-20250628-025644/nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5"
-if os.path.exists(weight_path):
-    nerf_trainer.load_weights(weight_path)
-    print("Model weights loaded successfully.")
+# weight_path = f"{MODEL_DIR}/{config_filename}-20250628-025644/nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5"
+
+weight_file_prefix = f"nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}"
+weight_path = f"{MODEL_DIR}/{config_filename}-20250630-072149/nerf_l{NUM_LAYERS}_d{HIDDEN_DIM}_n{NS_COARSE + NS_FINE}_ep{EPOCHS}.weights.h5"
+
+if WITH_GCS:
+    weight_path = tf.io.gfile.join(checkpoint_dir, f"{weight_file_prefix}.weights.h5")
+    if not tf.io.gfile.exists(weight_path):
+        print(f"Model weights not found at {weight_path}.")
 else:
-    print(f"Model weights not found at {weight_path}.")
+    weight_path = os.path.join(MODEL_DIR, f"{weight_file_prefix}.weights.h5")
+    if not os.path.exists(weight_path):
+        print(f"Model weights not found at {weight_path}.")
+        
+nerf_trainer.load_weights(weight_path)
+print("Model weights loaded successfully.")
 
-# Get first 5 samples from the validation dataset
-n_images = 3
-n_samples = n_images * H * W
 
-val_image_samples = val_images_s[:n_samples]
-val_ray_ori_samples = val_ray_oris_s[:n_samples]
-val_ray_dir_samples = val_ray_dirs_s[:n_samples]
+# # Get first 5 samples from the validation dataset
+# # n_images = 3
+# n_images = 2
+# n_samples = n_images * H * W
 
-t_vals = generate_t_vals(near, far, ops.shape(val_ray_ori_samples)[0], NS_COARSE, rand_sampling=False)
+# val_image_samples = val_images_s[:n_samples]
+# val_ray_ori_samples = val_ray_oris_s[:n_samples]
+# val_ray_dir_samples = val_ray_dirs_s[:n_samples]
 
-val_rgbs, val_depths, val_weights, _ = nerf_trainer.forward_pass(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, training=False)
+# t_vals = generate_t_vals(near, far, ops.shape(val_ray_ori_samples)[0], NS_COARSE, rand_sampling=False)
 
-val_rgb_coarse, val_rgb_fine = val_rgbs
-val_depth_coarse, val_depth_fine = val_depths
-val_weights_coarse, val_weights_fine = val_weights
+# # val_rgbs, val_depths, val_weights, _ = nerf_trainer.forward_pass(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, training=False)
+# val_rgbs, val_depths, val_weights, _ = nerf_trainer.forward_pass_with_minibatch(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, training=False, batch_size=512)
 
-# Reshape the test_recons_images and depth_maps to (nb, H, W, 3) and (nb, H, W) respectively.
-nb = int(ops.shape(val_image_samples)[0] / (H * W))
-ori_imgs = ops.reshape(val_image_samples, (nb, H, W, 3))
-recons_imgs = ops.reshape(val_rgb_fine, (nb, H, W, 3))
-depth_maps = ops.reshape(val_depth_fine, (nb, H, W))
+# val_rgb_coarse, val_rgb_fine = val_rgbs
+# val_depth_coarse, val_depth_fine = val_depths
+# val_weights_coarse, val_weights_fine = val_weights
+
+# # Reshape the test_recons_images and depth_maps to (nb, H, W, 3) and (nb, H, W) respectively.
+# nb = int(ops.shape(val_image_samples)[0] / (H * W))
+# ori_imgs = ops.reshape(val_image_samples, (nb, H, W, 3))
+# recons_imgs = ops.reshape(val_rgb_fine, (nb, H, W, 3))
+# depth_maps = ops.reshape(val_depth_fine, (nb, H, W))
 
 # # Create subplots
 # fig, axes = plt.subplots(nrows=n_images, ncols=3, figsize=(10, 20))
@@ -204,14 +226,14 @@ batch_ray_oris = []
 batch_ray_dirs = []
 
 # Iterate over different theta value and generate scenes.
-for index, theta in tqdm(enumerate(np.linspace(0.0, 360.0, 120, endpoint=False))):
+for index, theta in tqdm(enumerate(np.linspace(-45.0, 45.0, 30, endpoint=False))):
     # Get the camera to world matrix.
     c2w = pose_spherical(theta, -30.0, 4.0)
 
     ray_oris, ray_dirs = get_rays(H, W, focal, c2w)
     # print(f"Shape of ray_oris: {ray_oris.shape}, ray_dirs: {ray_dirs.shape}")
 
-    if index % 2 == 0 and index > 0:
+    if index % 4 == 0 and index > 0:
         print(f"Processing frame {index} with theta: {theta:.2f}")
         batched_ray_oris = ops.stack(batch_ray_oris, axis=0)
         batch_ray_oris = [ray_oris]
@@ -224,7 +246,8 @@ for index, theta in tqdm(enumerate(np.linspace(0.0, 360.0, 120, endpoint=False))
         ray_dir_s = ops.reshape(batched_ray_dirs, (-1, batched_ray_dirs.shape[-1]))
         t_vals_s = generate_t_vals(near, far, ops.shape(ray_ori_s)[0], NS_COARSE, rand_sampling=False)
 
-        rgbs, depth_maps, weights, _ = nerf_trainer.forward_pass(ray_ori_s, ray_dir_s, t_vals_s, L_XYZ, L_DIR, training=False)
+        # rgbs, _, _, _ = nerf_trainer.forward_pass(ray_ori_s, ray_dir_s, t_vals_s, L_XYZ, L_DIR, training=False)
+        rgbs, _, _, _ = nerf_trainer.forward_pass_with_minibatch(ray_ori_s, ray_dir_s, t_vals_s, L_XYZ, L_DIR, training=False, batch_size=2048)
 
         # Get the RGB from the fine model
         rgb_fine = rgbs[1]
@@ -243,3 +266,44 @@ for index, theta in tqdm(enumerate(np.linspace(0.0, 360.0, 120, endpoint=False))
         
 rgb_video = f"{config_filename}_rgb_video_tpu.mp4"
 imageio.mimwrite(rgb_video, rgb_frames, fps=30, quality=7, macro_block_size=None)
+
+# # Iterate over different theta value and generate scenes.
+# for index, theta in tqdm(enumerate(np.linspace(0.0, 360.0, 120, endpoint=False))):
+#     # Get the camera to world matrix.
+#     c2w = pose_spherical(theta, -30.0, 4.0)
+
+#     ray_oris, ray_dirs = get_rays(H, W, focal, c2w)
+#     # print(f"Shape of ray_oris: {ray_oris.shape}, ray_dirs: {ray_dirs.shape}")
+
+#     if index % 2 == 0 and index > 0:
+#         print(f"Processing frame {index} with theta: {theta:.2f}")
+#         batched_ray_oris = ops.stack(batch_ray_oris, axis=0)
+#         batch_ray_oris = [ray_oris]
+        
+#         batched_ray_dirs = ops.stack(batch_ray_dirs, axis=0)
+#         batch_ray_dirs = [ray_dirs]
+
+#         # Render the RGB and depth maps using the nerf model
+#         ray_ori_s = ops.reshape(batched_ray_oris, (-1, batched_ray_oris.shape[-1]))
+#         ray_dir_s = ops.reshape(batched_ray_dirs, (-1, batched_ray_dirs.shape[-1]))
+#         t_vals_s = generate_t_vals(near, far, ops.shape(ray_ori_s)[0], NS_COARSE, rand_sampling=False)
+
+#         rgbs, depth_maps, weights, _ = nerf_trainer.forward_pass(ray_ori_s, ray_dir_s, t_vals_s, L_XYZ, L_DIR, training=False)
+
+#         # Get the RGB from the fine model
+#         rgb_fine = rgbs[1]
+
+#         # Reshape rgb_fine to (nb, H, W, 3)
+#         nb = int(ops.shape(rgb_fine)[0] / (H * W))
+#         rgb_fine = ops.reshape(rgb_fine, (nb, H, W, 3))
+        
+#         # Get the RGB frames from the rendered images
+#         temp_rgb = [np.clip(255 * img, 0.0, 255.0).astype(np.uint8) for img in rgb_fine]
+#         rgb_frames += temp_rgb
+#     else:
+#         # batch_flat.append(rays_flat)
+#         batch_ray_oris.append(ray_oris)
+#         batch_ray_dirs.append(ray_dirs)
+        
+# rgb_video = f"{config_filename}_rgb_video_tpu.mp4"
+# imageio.mimwrite(rgb_video, rgb_frames, fps=30, quality=7, macro_block_size=None)

@@ -517,7 +517,7 @@ def prepare_fern_data(target_height, target_width, from_gcs=False):
     train_ray_dirs_s = ops.reshape(train_ray_dirs, [-1, train_ray_dirs.shape[-1]])
     val_ray_dirs_s = ops.reshape(val_ray_dirs, [-1, val_ray_dirs.shape[-1]])
 
-    return (train_images_s, train_ray_oris_s, train_ray_dirs_s), (val_images_s, val_ray_oris_s, val_ray_dirs_s), (near, far)
+    return (train_images_s, train_ray_oris_s, train_ray_dirs_s), (val_images_s, val_ray_oris_s, val_ray_dirs_s), (near, far), focal
 
 if __name__ == "__main__":
     # Example usage
