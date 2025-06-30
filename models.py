@@ -3,6 +3,7 @@ from keras import layers
 from keras import ops
 import tensorflow as tf
 import numpy as np
+from tqdm import tqdm
 
 from data_utils import sample_pdf, sample_rays, encode_position, volume_render
 
@@ -183,7 +184,8 @@ class NeRFTrainer(keras.Model):
         preds_coarse_list = []
         preds_fine_list = []
 
-        for i in range(num_batches):
+        for i in tqdm(range(num_batches), desc="Processing batches"):
+        # for i in range(num_batches):
             # Calculate the start and end indices for the current batch
             start_idx = i * batch_size
             end_idx = min((i + 1) * batch_size, ops.shape(ray_origins)[0])

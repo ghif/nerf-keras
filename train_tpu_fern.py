@@ -196,14 +196,13 @@ class TrainCallback(keras.callbacks.Callback):
         history["losses"] = loss_list
         history["psnrs"] = psnr_list
 
-        if (epoch + 1) % 2 == 0:
+        if (epoch + 1) % 10 == 0:
             # Predict with volume rendering
             nsample = 1 * H * W
             val_ray_ori_samples = val_ray_oris_s[:nsample]
             val_ray_dir_samples = val_ray_dirs_s[:nsample]
 
             t_vals = generate_t_vals(near, far, ops.shape(val_ray_ori_samples)[0], NS_COARSE, rand_sampling=True)
-            # rgbs, depths, _, _ = self.model.forward_pass(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, training=False)
             rgbs, depths, _, _ = self.model.forward_pass_with_minibatch(val_ray_ori_samples, val_ray_dir_samples, t_vals, L_XYZ, L_DIR, batch_size=TEST_BATCH_SIZE, training=False)
 
             (_, test_recons_images) = rgbs
@@ -230,6 +229,7 @@ class TrainCallback(keras.callbacks.Callback):
                 weight_path = os.path.join(checkpoint_dir, f"{weight_file_prefix}.weights.h5")
 
             self.model.save_weights(weight_path)
+            print(f"Saved model weights to: {weight_path}")
 
             # Plot the rgb, depth and the loss plot.
             fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(20, 5))
