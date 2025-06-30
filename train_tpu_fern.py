@@ -196,7 +196,7 @@ class TrainCallback(keras.callbacks.Callback):
         history["losses"] = loss_list
         history["psnrs"] = psnr_list
 
-        if (epoch + 1) % 2 == 0:
+        if (epoch + 1) % 1 == 0:
             # Predict with volume rendering
             nsample = 1 * H * W
             val_ray_ori_samples = val_ray_oris_s[:nsample]
