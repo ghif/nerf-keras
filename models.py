@@ -173,7 +173,10 @@ class NeRFTrainer(keras.Model):
 
         # Create TF dataset to exploit parallel processing
         dataset = tf.data.Dataset.from_tensor_slices((ray_origins, ray_directions, t_vals))
-        dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+        dataset = (
+           dataset.batch(batch_size, num_parallel_calls=tf.data.AUTOTUNE)
+            .prefetch(tf.data.AUTOTUNE)
+        )
         
         # # Split the samples into batches to avoid memory issues
         # num_batches = int(np.ceil(ops.shape(ray_origins)[0] / batch_size))
