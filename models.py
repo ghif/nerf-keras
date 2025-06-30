@@ -148,7 +148,7 @@ class NeRFTrainer(keras.Model):
     def metrics(self):
         return [self.loss_tracker, self.psnr_tracker]
     
-    def forward_pass(self, ray_origins, ray_directions, t_vals, l_xyz, l_dir, training=False, batch_size=512):
+    def forward_pass(self, ray_origins, ray_directions, t_vals, l_xyz, l_dir, training=False, batch_size=None):
         rays, dirs = sample_rays(ray_origins, ray_directions, t_vals)
         rays_enc = encode_position(rays, pos_encode_dims=l_xyz)
         dirs_enc = encode_position(dirs, pos_encode_dims=l_dir)
@@ -156,7 +156,10 @@ class NeRFTrainer(keras.Model):
         if training:
             predictions_coarse = self.coarse_model([rays_enc, dirs_enc], training=True)
         else:
-            predictions_coarse = self.coarse_model.predict([rays_enc, dirs_enc], batch_size=batch_size)
+            if batch_size is not None:
+                predictions_coarse = self.coarse_model.predict([rays_enc, dirs_enc], batch_size=batch_size)
+            else:
+                predictions_coarse = self.coarse_model([rays_enc, dirs_enc], training=False)
         # predictions_coarse = self.coarse_model.predict([rays_enc, dirs_enc], batch_size=128)
         rgb_coarse, depth_coarse, weights_coarse = volume_render(predictions_coarse, t_vals)
         t_vals_coarse_mid = (0.5 * (t_vals[..., 1:] + t_vals[..., :-1]))
